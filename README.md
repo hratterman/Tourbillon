@@ -1,10 +1,14 @@
 # Minute-Repeating Tourbillon — Browser Simulator
 
-A physically-grounded, interactive simulation of a minute-repeating tourbillon
-wristwatch movement. This is not a watch-face animation: every observable
-behaviour — the tick, the carriage rotation, the chime count, the rate —
-**emerges** from a simulated mechanism. In particular, the repeater's strike
-count is read off simulated rack-and-snail geometry, never off the clock.
+A physically-grounded, interactive **3D simulation** of a minute-repeating
+tourbillon wristwatch movement — a functional model you can orbit from any
+angle and tear apart layer by layer, rendered as real metal (PBR brass,
+polished and brushed steel, blued screws-and-springs, ruby jewels, sapphire
+crystal) under a studio environment. This is not a watch-face animation:
+every observable behaviour — the tick, the carriage rotation, the chime
+count, the rate — **emerges** from a simulated mechanism. In particular, the
+repeater's strike count is read off simulated rack-and-snail geometry,
+never off the clock.
 
 ```bash
 npm install
@@ -64,14 +68,22 @@ raised-cosine hammer contact, through a tanh soft limiter. The identical
 modal core (one plain-JS module, inlined verbatim into the worklet) renders
 buffers for the headless audio tests. Fundamentals are tunable in the UI.
 
-### Assembly & teardown
-Every part carries a layer, a Z-depth, an assembled transform (live, driven
-by the mechanism) and an exploded offset. The depth slider peels the watch
-apart continuously and reversibly; presets show the full case, movement
+### Assembly & teardown (3D)
+Every part is a solid — extruded gears with real teeth, stepped snail cams
+cut to the exact profile the physics reads, spiral-tube hairspring and
+cathedral gongs, lathed case, domed sapphire with transmission — carrying a
+layer, a stack Z-depth, an assembled transform (live, driven by the
+mechanism) and an exploded offset along the true watch axis. Drag to orbit,
+scroll to zoom. The depth slider peels the watch apart continuously and
+reversibly like a real disassembly; presets show the full case, movement
 only, dial side, or going-train side; clicking any part isolates it with a
-label and its live state. The simulation keeps running throughout — fire
-the repeater in exploded view and watch the racks fall onto their snails
-with nothing occluding them.
+label and its live state. Flip it over: the sapphire exhibition back shows
+the ratchet wheel, bridges and the flying tourbillon cock. The simulation
+keeps running throughout — fire the repeater in exploded view and watch the
+racks fall onto their snails with nothing occluding them.
+
+Rendering is three.js (rendering only — the physics integrator, event
+detection and the audio synth remain hand-written per the ground rules).
 
 ## Acceptance tests
 
@@ -103,8 +115,8 @@ with nothing occluding them.
 | **Pull crown** (or double-click it) | setting mode: hands + snails move together, both directions |
 | **Regulator** | ± rate; watch the s/day readout respond |
 | **Time scale** | 0.02× (watch one escapement cycle: lock–impulse–drop) to 1000× (watch the reserve run down) |
-| **Teardown slider / presets / layer toggles** | peel the assembly apart while it runs |
-| Click any part | isolate + live state; scroll zooms, drag pans |
+| **Teardown slider / presets / layer toggles** | peel the assembly apart in 3D while it runs |
+| Click any part | isolate + live state; drag orbits, scroll zooms, right-drag pans |
 
 The timing-machine readouts (rate, amplitude, beat error) are measured from
 escapement event timestamps the way a real machine measures them from the

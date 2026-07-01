@@ -13,12 +13,50 @@ body {
   display: flex;
   height: 100%;
 }
-#watch {
+#stage {
   flex: 1;
   min-width: 0;
   height: 100%;
-  cursor: crosshair;
+  position: relative;
+  overflow: hidden;
+}
+#stage canvas {
+  display: block;
+  cursor: grab;
   touch-action: none;
+}
+.label-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+.part-label {
+  font: 11px ui-monospace, monospace;
+  color: #dfe6f0;
+  background: rgba(12, 15, 20, 0.82);
+  border: 1px solid rgba(220, 228, 240, 0.3);
+  border-radius: 4px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.part-detail {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  font: 12px ui-monospace, monospace;
+  background: rgba(12, 15, 20, 0.9);
+  border: 1px solid rgba(220, 228, 240, 0.35);
+  border-radius: 5px;
+  padding: 7px 10px;
+  max-width: 260px;
+}
+.part-detail .title {
+  color: #e8edf5;
+  margin-bottom: 3px;
+}
+.part-detail .line {
+  color: #9fb0c8;
 }
 #panel {
   width: 300px;

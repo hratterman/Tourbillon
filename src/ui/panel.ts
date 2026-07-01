@@ -1,6 +1,6 @@
 import type { Movement } from '../core/movement'
 import type { GongEngine } from '../audio/gongs'
-import type { Renderer } from '../render/renderer'
+import type { Renderer3D } from '../render3d/scene3d'
 import { ALL_LAYERS, PRESETS, type LayerName } from '../render/parts'
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T
@@ -8,7 +8,7 @@ const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) 
 /** Wire the side panel: controls in, readouts out. */
 export function setupPanel(
   mv: Movement,
-  renderer: Renderer,
+  renderer: Renderer3D,
   gongs: GongEngine,
   state: { timeScale: number },
 ): void {

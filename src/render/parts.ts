@@ -14,7 +14,17 @@ import { hourSnailSteps, quarterSnailRadius } from '../core/snails'
 
 export type LayerName = 'caseback' | 'train' | 'dialside' | 'dial' | 'hands' | 'case'
 
+/** Full 3D transform: x/y in the watch plane (y toward 6 o'clock), z along
+ * the watch axis (toward the crystal), rot about the watch axis. */
 export interface Transform {
+  x: number
+  y: number
+  z: number
+  rot: number
+}
+
+/** In-plane transform produced by the mechanism (z comes from the stack). */
+export interface PlanarTransform {
   x: number
   y: number
   rot: number
@@ -25,17 +35,19 @@ export interface Part {
   label: string
   layer: LayerName
   z: number
-  /** Assembled transform, following the live mechanism state. */
-  assembled(mv: Movement): Transform
-  /** Unit-ish direction the part lifts along when exploding. */
-  explodeDir: { x: number; y: number }
+  /** Assembled in-plane transform, following the live mechanism state. */
+  assembled(mv: Movement): PlanarTransform
+  /** Assembled position along the watch axis (world units, 0 = caseback seat). */
+  zPos: number
+  /** Unit-ish 3D direction the part lifts along when exploding. */
+  explodeDir: { x: number; y: number; z: number }
   /** Approximate visual radius, for hit-testing / labels. */
   hitRadius: number
   /** Live state readout for click-to-isolate. */
   liveState(mv: Movement): string[]
 }
 
-const DIR_UP = { x: 0.3, y: -1 }
+const DIR_UP = { x: 0, y: 0, z: 1 } // straight off the stack, like a real teardown
 
 /** Layer separation when fully exploded (world units) + intra-layer step. */
 const LAYER_RANK: Record<LayerName, number> = {
@@ -70,9 +82,14 @@ export function easeInOutCubic(x: number): number {
 /** Transform at teardown depth d (0 assembled .. 1 fully exploded). */
 export function partTransform(p: Part, mv: Movement, depth: number): Transform {
   const a = p.assembled(mv)
-  if (depth === 0) return a
+  if (depth === 0) return { x: a.x, y: a.y, z: p.zPos, rot: a.rot }
   const e = easeInOutCubic(Math.max(0, Math.min(1, depth))) * explodeMag(p)
-  return { x: a.x + p.explodeDir.x * e, y: a.y + p.explodeDir.y * e, rot: a.rot }
+  return {
+    x: a.x + p.explodeDir.x * e,
+    y: a.y + p.explodeDir.y * e,
+    z: p.zPos + p.explodeDir.z * e,
+    rot: a.rot,
+  }
 }
 
 // --- fixed geometry of the calibre (world units, movement centre at 0,0) ---
@@ -95,14 +112,14 @@ export const GEO = {
   hammerHigh: { x: 141, y: 10 },
   gongAnchor: { x: 150, y: -5 },
   allOrNothing: { x: -146, y: -14 },
-  crown: { x: 224, y: 0 },
+  crown: { x: 233, y: 0 },
   slide: { x: -208, y: 0 },
   dialR: 172,
   apertureR: 54,
 }
 
 function fixed(x: number, y: number, rot: (mv: Movement) => number = () => 0) {
-  return (mv: Movement): Transform => ({ x, y, rot: rot(mv) })
+  return (mv: Movement): PlanarTransform => ({ x, y, rot: rot(mv) })
 }
 
 /**
@@ -119,9 +136,49 @@ export const CONTACT = {
 
 const fmt = (x: number, digits = 1) => x.toFixed(digits)
 
+/** Assembled height of each part along the watch axis (world units). */
+const ZPOS: Record<string, number> = {
+  caseback: -6,
+  slideSpring: 0,
+  fixedFourth: 10,
+  barrel: 14,
+  centerWheel: 16,
+  thirdWheel: 16,
+  palletFork: 16,
+  carriage: 18,
+  escapeWheel: 18,
+  trainBridge: 8,
+  balance: 26,
+  tourbillonBridge: 6,
+  mainplate: 33,
+  motionWorks: 36,
+  hourStar: 38,
+  quarterSnail: 39,
+  surprisePiece: 40,
+  hourSnail: 41,
+  allOrNothing: 42,
+  minuteSnail: 43,
+  strikeTrain: 43,
+  flyGovernor: 43,
+  gongLow: 38,
+  gongHigh: 40,
+  hourRack: 45,
+  quarterRack: 45,
+  minuteRack: 45,
+  hammerLow: 45,
+  hammerHigh: 45,
+  dial: 52,
+  hourHand: 56,
+  minuteHand: 59,
+  caseband: 24,
+  crown: 26,
+  repeaterSlide: 26,
+  bezelCrystal: 66,
+}
+
 export function buildParts(): Part[] {
   const g = GEO
-  const parts: Part[] = [
+  const parts: Omit<Part, 'zPos'>[] = [
     // ----------------------------------------------------- caseback (z 0+)
     {
       id: 'caseback',
@@ -129,7 +186,7 @@ export function buildParts(): Part[] {
       layer: 'caseback',
       z: 0,
       assembled: fixed(0, 0),
-      explodeDir: { x: -0.1, y: 0.9 }, // drops away behind
+      explodeDir: { x: 0, y: 0, z: -1 }, // drops away behind
       hitRadius: 185,
       liveState: (mv) => [`sapphire exhibition back`, `movement running: ${mv.running ? 'yes' : 'no'}`],
     },
@@ -139,7 +196,7 @@ export function buildParts(): Part[] {
       layer: 'caseback',
       z: 2,
       assembled: fixed(g.slide.x + 14, g.slide.y + 26),
-      explodeDir: { x: -0.2, y: 0.85 },
+      explodeDir: { x: 0, y: 0, z: -1 },
       hitRadius: 22,
       liveState: (mv) => [`preload: ${fmt(mv.repeater.slideTravel * 100, 0)}% travel`],
     },
@@ -269,6 +326,16 @@ export function buildParts(): Part[] {
       explodeDir: DIR_UP,
       hitRadius: 50,
       liveState: () => ['upper pivot for the carriage'],
+    },
+    {
+      id: 'mainplate',
+      label: 'Mainplate',
+      layer: 'train',
+      z: 19.5,
+      assembled: fixed(0, 0),
+      explodeDir: DIR_UP,
+      hitRadius: 162,
+      liveState: () => ['carries the dial-side works', 'tourbillon aperture at 6'],
     },
     {
       id: 'trainBridge',
@@ -517,7 +584,7 @@ export function buildParts(): Part[] {
       layer: 'case',
       z: 81,
       assembled: fixed(GEO.crown.x, GEO.crown.y),
-      explodeDir: { x: 1, y: -0.2 },
+      explodeDir: { x: 1, y: 0, z: 0.12 }, // pulls out along its stem
       hitRadius: 18,
       liveState: (mv) => [
         mv.crownPulled ? 'position 1: SETTING (drag to move the hands)' : 'position 0: WINDING',
@@ -534,7 +601,7 @@ export function buildParts(): Part[] {
         y: GEO.slide.y + mv.repeater.slideTravel * 34,
         rot: 0,
       }),
-      explodeDir: { x: -1, y: -0.2 },
+      explodeDir: { x: -1, y: 0, z: 0.12 },
       hitRadius: 20,
       liveState: (mv) => [
         `travel: ${fmt(mv.repeater.slideTravel * 100, 0)}%`,
@@ -552,7 +619,7 @@ export function buildParts(): Part[] {
       liveState: () => ['sapphire, AR-coated (honest)'],
     },
   ]
-  return parts
+  return parts.map((p) => ({ ...p, zPos: ZPOS[p.id] ?? 0 }))
 }
 
 function rackAngle(mv: Movement, which: 'hour' | 'quarter' | 'minute'): number {

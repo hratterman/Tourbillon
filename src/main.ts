@@ -1,6 +1,6 @@
 import { GongEngine } from './audio/gongs'
 import { Movement } from './core/movement'
-import { Renderer } from './render/renderer'
+import { Renderer3D } from './render3d/scene3d'
 import { setupCanvasInteraction } from './ui/interact'
 import { setupPanel, updateReadouts } from './ui/panel'
 
@@ -14,16 +14,16 @@ import { setupPanel, updateReadouts } from './ui/panel'
  * the audible cadence.
  */
 
-const canvas = document.getElementById('watch') as HTMLCanvasElement
+const stage = document.getElementById('stage') as HTMLElement
 const mv = new Movement({ h: 10, m: 47, s: 20 }) // the canonical demo time
 mv.advance(5) // settle to steady amplitude before first paint
 
-const renderer = new Renderer(canvas, mv)
+const renderer = new Renderer3D(stage, mv)
 const gongs = new GongEngine()
 const state = { timeScale: 1 }
 
 setupPanel(mv, renderer, gongs, state)
-setupCanvasInteraction(canvas, mv, renderer)
+setupCanvasInteraction(mv, renderer)
 
 // expose for automation / debugging / screenshots
 ;(window as unknown as Record<string, unknown>).__watch = { mv, renderer, state }
@@ -32,15 +32,15 @@ let lastMs = performance.now()
 let readoutTimer = 0
 
 function frame(nowMs: number): void {
-  const wallDt = Math.min(0.1, (nowMs - lastMs) / 1000)
+  // the first rAF timestamp can precede the performance.now() captured
+  // after the (slow) WebGL init — never let the clock run backwards
+  const wallDt = Math.max(0, Math.min(0.1, (nowMs - lastMs) / 1000))
   lastMs = nowMs
 
   // physics: wall time × timeScale, budgeted
   const t0 = performance.now()
   const simT0 = mv.t
   const want = wallDt * state.timeScale
-  // budget ~9 ms of stepping per frame; if we can't keep up, the effective
-  // scale drops rather than the page freezing
   let advanced = 0
   const chunk = Math.max(mv.dtPhysics * 16, want / 8)
   while (advanced < want && performance.now() - t0 < 9) {

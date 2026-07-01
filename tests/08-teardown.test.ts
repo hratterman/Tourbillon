@@ -28,11 +28,14 @@ describe('assembly stack and teardown', () => {
       seen.add(p.id)
       expect(ALL_LAYERS).toContain(p.layer)
       expect(Number.isFinite(p.z)).toBe(true)
+      expect(Number.isFinite(p.zPos)).toBe(true)
       const a = partTransform(p, mv, 0)
       const e = partTransform(p, mv, 1)
-      for (const v of [a.x, a.y, a.rot, e.x, e.y, e.rot]) expect(Number.isFinite(v)).toBe(true)
+      for (const v of [a.x, a.y, a.z, a.rot, e.x, e.y, e.z, e.rot])
+        expect(Number.isFinite(v)).toBe(true)
       // exploded state actually lifts every part except the deepest (z=0)
-      if (p.z > 0) expect(Math.hypot(e.x - a.x, e.y - a.y)).toBeGreaterThan(0)
+      if (p.z > 0)
+        expect(Math.hypot(e.x - a.x, e.y - a.y, e.z - a.z)).toBeGreaterThan(0)
     }
   })
 
@@ -79,12 +82,12 @@ describe('assembly stack and teardown', () => {
   it('explode and reassemble are continuous and exactly reversible', () => {
     const mv = runningMovement(10, 47)
     for (const p of parts) {
-      const assembled = p.assembled(mv)
+      const assembled = partTransform(p, mv, 0)
       // continuity: offsets grow monotonically with depth
       let prev = 0
       for (let d = 0; d <= 1.0001; d += 0.05) {
         const t = partTransform(p, mv, Math.min(1, d))
-        const off = Math.hypot(t.x - assembled.x, t.y - assembled.y)
+        const off = Math.hypot(t.x - assembled.x, t.y - assembled.y, t.z - assembled.z)
         expect(off).toBeGreaterThanOrEqual(prev - 1e-9)
         prev = off
       }
@@ -92,6 +95,8 @@ describe('assembly stack and teardown', () => {
       const back = partTransform(p, mv, 0)
       expect(back.x).toBe(assembled.x)
       expect(back.y).toBe(assembled.y)
+      expect(back.z).toBe(assembled.z)
+      expect(back.z).toBe(p.zPos)
       expect(back.rot).toBe(assembled.rot)
     }
   })
@@ -116,7 +121,7 @@ describe('assembly stack and teardown', () => {
     const t = partTransform(rack, mv, depth)
     expect(Math.abs(t.rot)).toBeGreaterThan(0.1) // rotated off its rest position
     // while lifted well clear of its assembled position
-    const a = rack.assembled(mv)
-    expect(Math.hypot(t.x - a.x, t.y - a.y)).toBeGreaterThan(30)
+    const a = partTransform(rack, mv, 0)
+    expect(Math.hypot(t.x - a.x, t.y - a.y, t.z - a.z)).toBeGreaterThan(30)
   })
 })
