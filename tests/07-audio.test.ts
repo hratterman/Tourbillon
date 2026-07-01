@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-// @ts-expect-error plain-JS module shared verbatim with the AudioWorklet
 import { renderStrikes } from '../src/audio/modalcore.js'
 import { DEFAULT_HIGH_F0, DEFAULT_LOW_F0, makeGong } from '../src/audio/gongparams'
 import { chime, runningMovement } from './helpers'

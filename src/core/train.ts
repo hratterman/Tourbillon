@@ -7,7 +7,6 @@ import {
   MINUTE_WHEEL_TEETH,
   CANNON_TEETH,
   TAU,
-  THIRD_PER_CENTER,
 } from './constants'
 
 /**

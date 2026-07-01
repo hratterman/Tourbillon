@@ -35,8 +35,33 @@ export interface Part {
   liveState(mv: Movement): string[]
 }
 
-export const EXPLODE_SPACING = 2.6
 const DIR_UP = { x: 0.3, y: -1 }
+
+/** Layer separation when fully exploded (world units) + intra-layer step. */
+const LAYER_RANK: Record<LayerName, number> = {
+  caseback: 0,
+  train: 1,
+  dialside: 2,
+  dial: 3,
+  hands: 4,
+  case: 5,
+}
+const LAYER_BASE_Z: Record<LayerName, number> = {
+  caseback: 0,
+  train: 10,
+  dialside: 30,
+  dial: 60,
+  hands: 70,
+  case: 80,
+}
+export const LAYER_SPREAD = 235
+export const INTRA_SPREAD = 9
+export const MAX_LIFT = 5 * LAYER_SPREAD + 3 * INTRA_SPREAD
+
+/** Lift magnitude along the explode axis at depth 1. */
+export function explodeMag(p: Part): number {
+  return LAYER_RANK[p.layer] * LAYER_SPREAD + (p.z - LAYER_BASE_Z[p.layer]) * INTRA_SPREAD
+}
 
 export function easeInOutCubic(x: number): number {
   return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2
@@ -46,7 +71,7 @@ export function easeInOutCubic(x: number): number {
 export function partTransform(p: Part, mv: Movement, depth: number): Transform {
   const a = p.assembled(mv)
   if (depth === 0) return a
-  const e = easeInOutCubic(Math.max(0, Math.min(1, depth))) * p.z * EXPLODE_SPACING
+  const e = easeInOutCubic(Math.max(0, Math.min(1, depth))) * explodeMag(p)
   return { x: a.x + p.explodeDir.x * e, y: a.y + p.explodeDir.y * e, rot: a.rot }
 }
 
@@ -78,6 +103,18 @@ export const GEO = {
 
 function fixed(x: number, y: number, rot: (mv: Movement) => number = () => 0) {
   return (mv: Movement): Transform => ({ x, y, rot: rot(mv) })
+}
+
+/**
+ * Contact-line angles: the direction from each snail's centre to its rack
+ * pivot. The cams are rotated so that the step the CORE reads is exactly
+ * the step drawn under this line — the rack tail visibly lands on the
+ * correct snail step because both read the same geometry.
+ */
+export const CONTACT = {
+  hour: Math.atan2(GEO.hourRackPivot.y - GEO.hourStar.y, GEO.hourRackPivot.x - GEO.hourStar.x),
+  quarter: Math.atan2(GEO.quarterRackPivot.y - GEO.center.y, GEO.quarterRackPivot.x - GEO.center.x),
+  minute: Math.atan2(GEO.minuteRackPivot.y - GEO.center.y, GEO.minuteRackPivot.x - GEO.center.x),
 }
 
 const fmt = (x: number, digits = 1) => x.toFixed(digits)
@@ -285,7 +322,12 @@ export function buildParts(): Part[] {
       label: 'Hour snail (12 steps)',
       layer: 'dialside',
       z: 33,
-      assembled: (mv) => ({ x: g.hourStar.x, y: g.hourStar.y, rot: (mv.train.hourStar * TAU) / 12 }),
+      // rotated so the star's current step sits under the hour-rack tail
+      assembled: (mv) => ({
+        x: g.hourStar.x,
+        y: g.hourStar.y,
+        rot: CONTACT.hour - ((hourSnailSteps(mv.train.hourStar) - 0.5) / 12) * TAU,
+      }),
       explodeDir: DIR_UP,
       hitRadius: 30,
       liveState: (mv) => [
@@ -297,7 +339,9 @@ export function buildParts(): Part[] {
       label: 'Quarter snail (4 steps)',
       layer: 'dialside',
       z: 34,
-      assembled: (mv) => ({ x: g.center.x, y: g.center.y, rot: mv.train.cannonAngle }),
+      // deeper steps rotate under the quarter-rack contact line as the hour
+      // progresses (drawn profile matches quarterSnailRadius exactly)
+      assembled: (mv) => ({ x: g.center.x, y: g.center.y, rot: CONTACT.quarter - mv.train.cannonAngle }),
       explodeDir: DIR_UP,
       hitRadius: 24,
       liveState: (mv) => [
@@ -310,7 +354,7 @@ export function buildParts(): Part[] {
       label: 'Minute snail (4×15 steps)',
       layer: 'dialside',
       z: 35,
-      assembled: (mv) => ({ x: g.center.x, y: g.center.y, rot: mv.train.cannonAngle }),
+      assembled: (mv) => ({ x: g.center.x, y: g.center.y, rot: CONTACT.minute - mv.train.cannonAngle }),
       explodeDir: DIR_UP,
       hitRadius: 18,
       liveState: () => [`reads minutes within the quarter (0–14)`],

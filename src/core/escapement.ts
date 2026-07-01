@@ -66,7 +66,6 @@ export class Escapement {
   energyFriction = 0 // viscous + Coulomb losses
 
   private events: EscEvent[] = []
-  private engageT = 0
 
   /** Drain events recorded since the last call (for the timing machine). */
   drainEvents(): EscEvent[] {
@@ -106,7 +105,6 @@ export class Escapement {
         // outward, so this does not re-trigger.)
         if (s * p <= HALF_WINDOW && s * p >= -HALF_WINDOW && s * this.omega < 0) {
           this.phase = PHASE_UNLOCK
-          this.engageT = t
           this.events.push({ type: EV_ENGAGE, t, side: s })
         }
       }
