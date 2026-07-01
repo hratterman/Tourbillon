@@ -433,6 +433,17 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
         group.add(mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(p0, p1, p2), 24, 2, 10), mats.steel))
       }
       group.add(mesh(new THREE.TorusGeometry(10, 1.7, 10, 40), mats.steel, 0, 0, L.Z.cageTop - zp))
+      // balance upper pivot: cap jewel in a gold chaton under a three-armed
+      // anti-shock spring, seated in the cage's top hub
+      group.add(cyl(4.4, 1.4, mats.gold, 0, 0, L.Z.cageTop - zp + 0.4))
+      group.add(cyl(2.3, 1.1, mats.ruby, 0, 0, L.Z.cageTop - zp + 0.9))
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * TAU + 0.4
+        const armBox = box(6.4, 1.1, 0.6, mats.gold, 0, 0, 0)
+        armBox.position.set(Math.cos(a) * 3.6, Math.sin(a) * 3.6, L.Z.cageTop - zp + 1.5)
+        armBox.rotation.z = a
+        group.add(armBox)
+      }
       // seconds marker on the lower ring
       group.add(box(10, 3.2, 1.8, mats.blued, GEO.carriage.r + 6, 0, L.Z.cageRing - zp))
       // hairspring stud pillar (the spring's outer end is pinned here)
@@ -508,15 +519,42 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       group.add(cyl(1.2, 14, mats.steel)) // staff
       group.add(cyl(5.2, 1.5, mats.steel, 0, 0, L.Z.roller - 30))
       group.add(cyl(0.9, 3.2, mats.ruby, 0, -5.2, L.Z.roller - 30))
-      const spring = mesh(spiralTube(3, 20, 5.5, 0.45, 0, 300), mats.blued)
-      spring.position.z = (L.Z.hairspring.z0 + L.Z.hairspring.z1) / 2 - 30
-      group.add(spring)
-      group.add(cyl(2.2, 1.6, mats.blued, 0, 0, spring.position.z))
+      // Breathing hairspring: the OUTER end stays pinned to the carriage
+      // stud while the INNER end follows the staff through ±300°. The coil
+      // is precomputed at 0.15 rad steps of inner-end angle; the container
+      // counter-rotates the balance so the whole child lives in the
+      // carriage frame, exactly like the real spring.
+      const springZ = (L.Z.hairspring.z0 + L.Z.hairspring.z1) / 2 - 30
+      const springBox = new THREE.Group()
+      springBox.position.z = springZ
+      const OUTER_END = 5.5 * TAU // outer terminal: local +x, at the stud
+      const DELTA_STEP = 0.15
+      const DELTA_MAX = 5.6
+      const variants: THREE.Mesh[] = []
+      for (let dlt = -DELTA_MAX; dlt <= DELTA_MAX + 1e-9; dlt += DELTA_STEP) {
+        const turns = (OUTER_END - dlt) / TAU
+        const v = mesh(spiralTube(3, 20, turns, 0.45, dlt, 260), mats.blued)
+        v.visible = false
+        variants.push(v)
+        springBox.add(v)
+      }
+      group.add(springBox)
+      const collet = cyl(2.2, 1.6, mats.blued, 0, 0, springZ)
+      group.add(collet)
+      let lastVisible: THREE.Mesh | null = null
       return {
         group,
         update: (m) => {
-          // outer end pinned to the carriage stud; inner collet on the staff
-          spring.rotation.z = 0.85 * m.esc.theta
+          // container is carriage-fixed: cancel the balance rotation
+          springBox.rotation.z = m.esc.theta
+          const delta = Math.max(-DELTA_MAX, Math.min(DELTA_MAX, -m.esc.theta))
+          const idx = Math.round((delta + DELTA_MAX) / DELTA_STEP)
+          const v = variants[Math.max(0, Math.min(variants.length - 1, idx))]
+          if (v !== lastVisible) {
+            if (lastVisible) lastVisible.visible = false
+            v.visible = true
+            lastVisible = v
+          }
         },
       }
     }
@@ -607,26 +645,35 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       group.add(cyl(6.4, 2.8, mats.brass, 0, 0, 0, 24))
       break
     case 'hourRack':
-      return buildRack(group, mats, mv, () => mv.repeater.hourRack, 42, 12, 6 * DEG, 0.55,
-        GEO.hourRackPivot, GEO.hourStar, HOUR_SNAIL_R0, HOUR_SNAIL_DR, 'hour', 26.6)
+      return buildRack(group, mats, mv, () => mv.repeater.hourRack, L.RACK_GEO.hour, 12, 6 * DEG,
+        GEO.hourStar, HOUR_SNAIL_R0, HOUR_SNAIL_DR, 'hour', 26.1)
     case 'quarterRack':
-      return buildRack(group, mats, mv, () => mv.repeater.quarterRack, 34, 3, 8 * DEG, 3.565,
-        GEO.quarterRackPivot, GEO.center, QUARTER_SNAIL_R0, QUARTER_SNAIL_DR, 'quarter', 30.1)
+      return buildRack(group, mats, mv, () => mv.repeater.quarterRack, L.RACK_GEO.quarter, 3, 8 * DEG,
+        GEO.center, QUARTER_SNAIL_R0, QUARTER_SNAIL_DR, 'quarter', 30.1)
     case 'minuteRack':
-      return buildRack(group, mats, mv, () => mv.repeater.minuteRack, 34, 14, 4.5 * DEG, 4.35,
-        GEO.minuteRackPivot, GEO.center, MINUTE_SNAIL_R0, MINUTE_SNAIL_DR, 'minute', 33.1)
+      return buildRack(group, mats, mv, () => mv.repeater.minuteRack, L.RACK_GEO.minute, 14, 4.5 * DEG,
+        GEO.center, MINUTE_SNAIL_R0, MINUTE_SNAIL_DR, 'minute', 33.1)
     case 'strikeTrain': {
       const zp = 28
       // strike wheel with the gathering pallet, tooth-phased to its chain
       const sw = new THREE.Group()
       sw.add(gearOf(L.strikeWheel, mats.steelBrushed, { spokes: 3 }))
-      const finger = box(12, 3, 2, mats.blued, 6, 0, 0)
-      const fingerTip = cyl(1.6, 2, mats.blued, 12.6, 0, 0)
-      const fingerG = new THREE.Group()
-      fingerG.add(finger, fingerTip)
-      fingerG.position.z = (L.Z.gatherFinger.z0 + L.Z.gatherFinger.z1) / 2 - zp
-      sw.add(fingerG)
-      sw.add(cyl(2, 9.5, mats.steel, 0, 0, -2))
+      // gathering pallet staff: one pallet per rack tier (hour / quarter /
+      // minute), angularly staggered like a real stacked-rack repeater
+      const tiers: Array<[{ z0: number; z1: number }, number]> = [
+        [L.RACK_GEO.hour, 0],
+        [L.RACK_GEO.quarter, 2.1],
+        [L.RACK_GEO.minute, 4.2],
+      ]
+      for (const [tier, az] of tiers) {
+        const fingerG = new THREE.Group()
+        fingerG.add(box(L.GATHER_R - 0.8, 3, tier.z1 - tier.z0 - 0.2, mats.blued, (L.GATHER_R - 0.8) / 2, 0, 0))
+        fingerG.add(cyl(1.6, tier.z1 - tier.z0 - 0.2, mats.blued, L.GATHER_R - 0.6, 0, 0))
+        fingerG.position.z = (tier.z0 + tier.z1) / 2 - zp
+        fingerG.rotation.z = az
+        sw.add(fingerG)
+      }
+      sw.add(cyl(2, (L.RACK_GEO.minute.z1 - L.Z.plate.z1) + 2, mats.steel, 0, 0, (L.RACK_GEO.minute.z1 + L.Z.plate.z1) / 2 - zp))
       group.add(sw)
       // intermediate two-tier wheel toward the governor
       const inter = new THREE.Group()
@@ -671,21 +718,58 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
     case 'hammerLow':
     case 'hammerHigh': {
       const isLow = id === 'hammerLow'
+      const hg = isLow ? L.HAMMER_LOW : L.HAMMER_HIGH
+      const zp = hg.z
+      const mat = isLow ? mats.steel : mats.gold
       const arm = new THREE.Group()
-      arm.add(box(12, 3.2, 2.4, isLow ? mats.steel : mats.gold, 6, 0, 0))
-      arm.add(mesh(new THREE.BoxGeometry(6.5, 8.5, 4.6), isLow ? mats.steel : mats.gold, 13, 0, 0))
+      // head arm out to the gong band (three local: flip y, negate angles)
+      const headDx = hg.headTip.x - hg.pivot.x
+      const headDy = -(hg.headTip.y - hg.pivot.y)
+      const headLen = Math.hypot(headDx, headDy)
+      const headAz = Math.atan2(headDy, headDx)
+      const armGeo = new THREE.BoxGeometry(headLen - 4, 3.2, 2.4)
+      armGeo.translate((headLen - 4) / 2, 0, 0)
+      const headArm = mesh(armGeo, mat)
+      headArm.rotation.z = headAz
+      arm.add(headArm)
+      const head = mesh(new THREE.BoxGeometry(7, 9, 4.6), mat, 0, 0, 0)
+      head.position.set(Math.cos(headAz) * (headLen - 2), Math.sin(headAz) * (headLen - 2), 0)
+      head.rotation.z = headAz
+      arm.add(head)
+      // tail: TALL lifting pallet reaching into the racks' tooth paths at
+      // the gathering staff — this is what the returning rack teeth lift
+      const tailAz = Math.atan2(-Math.sin(hg.tailAzimuth), Math.cos(hg.tailAzimuth))
+      const tailGeo = new THREE.BoxGeometry(hg.tailLen, 3, 2.2)
+      tailGeo.translate(hg.tailLen / 2, 0, 0)
+      const tail = mesh(tailGeo, mat)
+      tail.rotation.z = tailAz
+      arm.add(tail)
+      const palletH = hg.tailZ1 - hg.tailZ0
+      const pallet = mesh(
+        new THREE.BoxGeometry(3, 4.2, palletH),
+        mats.blued,
+        Math.cos(tailAz) * hg.tailLen,
+        Math.sin(tailAz) * hg.tailLen,
+        (hg.tailZ0 + hg.tailZ1) / 2 - zp,
+      )
+      arm.add(pallet)
       group.add(arm)
       group.add(cyl(2.4, 5.4, mats.steel))
-      group.add(cyl(2, 8.5 - (isLow ? 0 : 2), mats.steel, 0, 0, -(isLow ? 4.2 : 3.2))) // stud to the plate
-      // hammer return spring: a small blade pressing the arm tail
-      const hs = mesh(spiralTube(3, 9, 0.8, 0.6, 2.4, 50), mats.blued)
-      hs.position.set(-7, isLow ? 6 : -6, 0)
+      group.add(cyl(2, zp - L.Z.plate.z1, mats.steel, 0, 0, -(zp - L.Z.plate.z1) / 2 - 1)) // stud
+      // hammer return spring
+      const hs = mesh(spiralTube(3, 9, 0.8, 0.6, tailAz + 2.2, 50), mats.blued)
       group.add(hs)
       return {
         group,
-        update: (_m, fx) => {
+        update: (m, fx) => {
+          // geometric lift: the hammer cocks as the gathering approaches its
+          // next strike (rack tooth riding the pallet), drops at the strike
+          const d = m.repeater.phaseToNextStrike(isLow ? 'low' : 'high')
+          const LIFT_SPAN = 0.55 * TAU
+          const lift = Number.isFinite(d) && d < LIFT_SPAN ? 1 - d / LIFT_SPAN : 0
           const flash = isLow ? fx.hammerFlash.low : fx.hammerFlash.high
-          arm.rotation.z = (isLow ? 1 : -1) * (1 - flash) * 0.42
+          // + cocks away from the gong; the flash overshoots into the strike
+          arm.rotation.z = -(lift * 0.4 - flash * 0.12)
         },
       }
     }
@@ -694,7 +778,7 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       const isLow = id === 'gongLow'
       const base = isLow ? mats.gongSteel : mats.gongGold
       const gm = base.clone()
-      const rStart = isLow ? 156 : 149
+      const rStart = (isLow ? L.GONG_LOW : L.GONG_HIGH).rStart
       const a0 = -(isLow ? -0.12 : 0.18)
       group.add(mesh(spiralTube(rStart, rStart - 17, -1.9, 1.6, a0, 420), gm))
       if (isLow) {
@@ -848,18 +932,19 @@ function buildRack(
   mats: Materials,
   mv: Movement,
   getRack: () => Rack,
-  r: number,
+  geo: L.RackGeo,
   teeth: number,
   pitch: number,
-  armAngleWatch: number,
-  pivot: { x: number; y: number },
   snailC: { x: number; y: number },
   r0: number,
   dr: number,
   which: keyof typeof CONTACT,
   zPos: number,
 ): Built {
-  const sector = mesh(rackSectorGeometry(r, teeth, pitch, 2.2), mats.steelBrushed)
+  const r = geo.sectorR
+  const pivot = geo.pivot
+  const armAngleWatch = geo.armAngle
+  const sector = mesh(rackSectorGeometry(r, teeth, pitch, geo.z1 - geo.z0), mats.steelBrushed)
   sector.rotation.z = -armAngleWatch
   group.add(sector)
   const armLen = r * 0.82

@@ -140,9 +140,9 @@ export const SET_RATIO = (12 / 48) * (8 / 36) * (36 / 12) // 1/6
 // --------------------------------------------------------------------- //
 
 export const strikeWheel = wheel(40, 1.0, 72, -72, 27, 29)
-export const strikeInterPinion = wheel(10, 1.0, NaN, NaN, 27, 29)
-export const strikeInterWheel = wheel(36, 0.7, NaN, NaN, 29.2, 31.4)
-export const governorPinion = wheel(24, 0.7, NaN, NaN, 29.2, 31.4)
+export const strikeInterPinion = wheel(10, 1.0, NaN, NaN, 27.6, 29.6)
+export const strikeInterWheel = wheel(36, 0.7, NaN, NaN, 29.8, 32)
+export const governorPinion = wheel(24, 0.7, NaN, NaN, 29.8, 32)
 {
   const dir = unit(-0.524, -0.852)
   const d1 = strikeWheel.r + strikeInterPinion.r
@@ -155,6 +155,90 @@ export const governorPinion = wheel(24, 0.7, NaN, NaN, 29.2, 31.4)
   governorPinion.y = strikeInterWheel.y + dir.y * d2
 }
 export const GOV_RATIO = (40 / 10) * (36 / 24) // 6
+
+// --------------------------------------------------------------------- //
+// Repeater cluster geometry: the racks' toothed sectors converge on the
+// strike wheel's three-tier gathering pallet staff (one pallet per rack
+// tier, like a real repeater's stacked racks), and the hammers pivot
+// between the cluster and the gongs — long arms out to the gong band,
+// tall tail pallets back into the racks' tooth paths, which is what
+// lifts them.
+// --------------------------------------------------------------------- //
+
+/** Reach of each gathering pallet from the strike-wheel arbor. */
+export const GATHER_R = 12.8
+
+export interface RackGeo {
+  pivot: { x: number; y: number }
+  sectorR: number // tooth root arc radius about the pivot
+  toothTipH: number
+  z0: number
+  z1: number
+  armAngle: number // sector centre-line azimuth (watch rad): aims at the staff
+}
+
+const aim = (from: { x: number; y: number }, to: { x: number; y: number }) =>
+  Math.atan2(to.y - from.y, to.x - from.x)
+
+export const RACK_GEO: Record<'hour' | 'quarter' | 'minute', RackGeo> = {
+  hour: {
+    pivot: { x: 25, y: -100 },
+    sectorR: 42,
+    toothTipH: 2.5,
+    z0: 25,
+    z1: 27.2,
+    armAngle: aim({ x: 25, y: -100 }, strikeWheel),
+  },
+  quarter: {
+    pivot: { x: 118, y: -58 },
+    sectorR: 34,
+    toothTipH: 2.4,
+    z0: 29,
+    z1: 31.2,
+    armAngle: aim({ x: 118, y: -58 }, strikeWheel),
+  },
+  minute: {
+    pivot: { x: 111, y: -46 },
+    sectorR: 34,
+    toothTipH: 2.4,
+    z0: 32,
+    z1: 34.2,
+    armAngle: aim({ x: 111, y: -46 }, strikeWheel),
+  },
+}
+
+export interface HammerGeo {
+  pivot: { x: number; y: number }
+  headTip: { x: number; y: number } // where the head meets its gong
+  tailAzimuth: number // toward the strike-wheel arbor
+  tailLen: number // pivot -> lifting pallet (just clear of the staff)
+  tailZ0: number
+  tailZ1: number // the tall lifting pallet spans its racks' tooth tiers
+  z: number // arm/head plane = its gong plane
+}
+
+function hammerGeo(pivot: { x: number; y: number }, headTip: { x: number; y: number }, z: number, tailZ0: number, tailZ1: number): HammerGeo {
+  const d = Math.hypot(strikeWheel.x - pivot.x, strikeWheel.y - pivot.y)
+  return {
+    pivot,
+    headTip,
+    tailAzimuth: aim(pivot, strikeWheel),
+    tailLen: d - GATHER_R,
+    tailZ0,
+    tailZ1,
+    z,
+  }
+}
+
+// low hammer: lifted by hour-rack AND quarter-rack teeth (tall pallet)
+export const HAMMER_LOW = hammerGeo({ x: 108, y: -52 }, { x: 147, y: -28 }, 29, 25, 31.2)
+// high hammer: lifted by quarter-rack AND minute-rack teeth
+export const HAMMER_HIGH = hammerGeo({ x: 94, y: -64 }, { x: 140, y: -42 }, 31, 29, 34.2)
+
+/** Gong bands (start radius spirals inward 17 units over 1.9 wraps). */
+export const GONG_LOW = { rStart: 156, z: 29 }
+export const GONG_HIGH = { rStart: 149, z: 31 }
+
 
 // --------------------------------------------------------------------- //
 // Z tiers for the rest of the stack (kept here so clashes are auditable)
@@ -272,6 +356,27 @@ check(
   Math.hypot(s2Wheel.x - CARRIAGE_POS.x, s2Wheel.y - CARRIAGE_POS.y) > 51 + s2Wheel.r,
   's2 clears the tourbillon well',
 )
+// every rack's tooth tips pass within reach of its gathering pallet tier
+for (const key of ['hour', 'quarter', 'minute'] as const) {
+  const rg = RACK_GEO[key]
+  const d = Math.hypot(strikeWheel.x - rg.pivot.x, strikeWheel.y - rg.pivot.y)
+  const gap = d - (rg.sectorR + rg.toothTipH)
+  check(gap > 8 && gap < GATHER_R + 1.2, `${key} rack teeth reach the gathering pallet (gap ${gap.toFixed(1)})`)
+}
+// hammer tails end just clear of the gathering staff, inside the tooth paths
+for (const [name, h] of [['low', HAMMER_LOW], ['high', HAMMER_HIGH]] as const) {
+  const tip = {
+    x: h.pivot.x + Math.cos(h.tailAzimuth) * h.tailLen,
+    y: h.pivot.y + Math.sin(h.tailAzimuth) * h.tailLen,
+  }
+  const toStaff = Math.hypot(strikeWheel.x - tip.x, strikeWheel.y - tip.y)
+  check(Math.abs(toStaff - GATHER_R) < 0.5, `${name} hammer tail meets the staff circle`)
+}
+// hammer heads land in their gong's radial band
+for (const [name, h, g] of [['low', HAMMER_LOW, GONG_LOW], ['high', HAMMER_HIGH, GONG_HIGH]] as const) {
+  const r = Math.hypot(h.headTip.x, h.headTip.y)
+  check(r > g.rStart - 17 && r < g.rStart + 1, `${name} hammer head reaches its gong (r ${r.toFixed(1)})`)
+}
 
 // --------------------------------------------------------------------- //
 // Rendered wheel angles (watch-plane, clockwise-positive), phase-locked

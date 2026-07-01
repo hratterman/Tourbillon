@@ -99,9 +99,17 @@ two-tier s2 → minute wheel → cannon, exactly 10 minutes of hand travel per
 crown turn. Both ratios are asserted equal to the ones the physics uses.
 The hands mount on a real centre-post stack (centre arbor → cannon pinion
 pipe → hour-wheel pipe) through the dial's centre hole; racks pivot on
-plate studs under shoulder screws with return springs; the strike wheel's
-gathering pallet sweeps the quarter-rack teeth and drives the governor
-through an intermediate two-tier wheel.
+plate studs under shoulder screws with return springs; all three racks' toothed sectors
+converge on the strike wheel's three-tier gathering pallet staff (one
+pallet per rack tier, like a real stacked-rack repeater), which drives the
+governor through an intermediate two-tier wheel; the hammers pivot between
+the cluster and the gongs — long arms out to the gong band, tall lifting
+pallets back into the racks' tooth paths — and their cocking is driven
+geometrically by the strike train's approach to each strike, dropping
+exactly on it. The hairspring genuinely breathes: its outer terminal stays
+pinned to the carriage stud while the inner end follows the staff through
+±300°, and the balance's upper pivot carries a cap jewel under a
+three-armed anti-shock spring.
 
 ## Acceptance tests
 

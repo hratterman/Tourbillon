@@ -115,6 +115,63 @@ describe('gear layout is mechanically true', () => {
     expect(Math.abs(Math.abs(L.s1Idler.y) - (L.s1Idler.r + L.CASTLE.r))).toBeLessThan(0.05)
   })
 
+  it('repeater cluster: racks reach the gathering staff, hammers reach racks and gongs', () => {
+    for (const key of ['hour', 'quarter', 'minute'] as const) {
+      const rg = L.RACK_GEO[key]
+      const d = Math.hypot(L.strikeWheel.x - rg.pivot.x, L.strikeWheel.y - rg.pivot.y)
+      const gap = d - (rg.sectorR + rg.toothTipH)
+      // tooth tips sweep within the pallet's reach, never into the arbor
+      expect(gap, `${key} rack`).toBeGreaterThan(8)
+      expect(gap, `${key} rack`).toBeLessThan(L.GATHER_R + 1.2)
+    }
+    for (const [name, h, g] of [
+      ['low', L.HAMMER_LOW, L.GONG_LOW],
+      ['high', L.HAMMER_HIGH, L.GONG_HIGH],
+    ] as const) {
+      // tail pallet ends on the gathering-staff circle...
+      const tip = {
+        x: h.pivot.x + Math.cos(h.tailAzimuth) * h.tailLen,
+        y: h.pivot.y + Math.sin(h.tailAzimuth) * h.tailLen,
+      }
+      expect(Math.abs(Math.hypot(L.strikeWheel.x - tip.x, L.strikeWheel.y - tip.y) - L.GATHER_R), name).toBeLessThan(0.5)
+      // ...and spans its lifting racks' tooth tiers in z
+      if (name === 'low') {
+        expect(h.tailZ0).toBeLessThanOrEqual(L.RACK_GEO.hour.z0 + 0.6)
+        expect(h.tailZ1).toBeGreaterThanOrEqual(L.RACK_GEO.quarter.z1 - 0.6)
+      } else {
+        expect(h.tailZ0).toBeLessThanOrEqual(L.RACK_GEO.quarter.z0 + 0.6)
+        expect(h.tailZ1).toBeGreaterThanOrEqual(L.RACK_GEO.minute.z1 - 0.6)
+      }
+      // head lands in its gong's radial band
+      const r = Math.hypot(h.headTip.x, h.headTip.y)
+      expect(r, name).toBeGreaterThan(g.rStart - 17)
+      expect(r, name).toBeLessThan(g.rStart + 1)
+    }
+  })
+
+  it('hammer lift is driven by the strike train, dropping exactly at each strike', () => {
+    const mv = new Movement()
+    mv.advance(8)
+    mv.train.setDisplayedTime(2, 16, 0, mv.t) // 2 low, 1 ding-dong, 1 high
+    for (let i = 0; i < 40; i++) mv.pushRepeaterSlide((i + 1) / 40)
+    mv.releaseRepeaterSlide()
+    mv.advance(0.3) // racks land, train starts
+    let sawLift = false
+    let prev = mv.repeater.phaseToNextStrike('low')
+    for (let i = 0; i < 1200 && mv.repeater.busy; i++) {
+      mv.advance(0.01)
+      const d = mv.repeater.phaseToNextStrike('low')
+      if (Number.isFinite(d) && Number.isFinite(prev)) {
+        // approach phase decreases monotonically between strikes
+        if (d < prev) sawLift = true
+        else expect(d).toBeGreaterThan(prev) // a strike consumed: phase jumped up
+      }
+      prev = d
+    }
+    expect(sawLift).toBe(true)
+    expect(mv.drainStrikes().length).toBe(2 + 2 + 1)
+  })
+
   it('the stem line is clear of every wheel it passes over', () => {
     // stem: y=0, z=24.5, from x=74 outward. No wheel tier may intersect it.
     for (const m of L.SPUR_MESHES) {

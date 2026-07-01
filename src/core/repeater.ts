@@ -254,6 +254,20 @@ export class Repeater {
     this.endPhi = phi + TAU
   }
 
+  /**
+   * Train rotation (rad) remaining until the next strike on `gong`;
+   * Infinity when none is pending. Drives the hammers' geometric lift —
+   * they cock as the gathering approaches and drop exactly at the strike.
+   * Reads only the landed-rack gather plan and the train angle.
+   */
+  phaseToNextStrike(gong: 'low' | 'high'): number {
+    if (this.phase !== PHASE_RUN) return Infinity
+    for (let i = this.nextSlot; i < this.slots.length; i++) {
+      if (this.slots[i].gong === gong) return this.slots[i].phi - this.trainPhi
+    }
+    return Infinity
+  }
+
   /** Gather progress within the current tooth, for rack render ratchet. */
   gatherProgress(rack: Rack): number {
     if (this.phase !== PHASE_RUN) return 0
