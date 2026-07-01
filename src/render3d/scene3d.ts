@@ -15,7 +15,7 @@ import { buildPartObject, type Built, type Fx } from './builders'
 import { makeEnvironment, makeMaterials, type Materials } from './materials'
 
 const LABELED_WHEN_EXPLODED = new Set([
-  'caseback', 'barrel', 'centerWheel', 'carriage', 'balance', 'fixedFourth',
+  'caseback', 'barrel', 'centerWheel', 'carriage', 'balance', 'fixedFourth', 'keylessWorks',
   'mainplate', 'trainBridge', 'hourSnail', 'quarterSnail', 'hourRack',
   'quarterRack', 'minuteRack', 'flyGovernor', 'allOrNothing', 'surprisePiece',
   'hammerLow', 'gongLow', 'dial', 'crown', 'repeaterSlide', 'bezelCrystal',

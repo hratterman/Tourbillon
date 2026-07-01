@@ -85,10 +85,27 @@ racks fall onto their snails with nothing occluding them.
 Rendering is three.js (rendering only — the physics integrator, event
 detection and the audio synth remain hand-written per the ground rules).
 
+### Mechanical layout (render3d/layout.ts)
+Every arbor position, pitch radius (r = module × teeth / 2), tooth count
+and z-tier lives in one audited module. Every spur mesh's centre distance
+equals the sum of pitch radii; tooth tiers overlap axially; driven wheels
+render tooth-phase-locked to their drivers (`meshedAngle`), so teeth
+genuinely interleave at any zoom. The **keyless works** is a real chain:
+crown → stem → winding pinion ⇄ sliding castle wheel (dog clutch opens and
+the castle slides to the setting wheels when you pull the crown) → contrate
+crown wheel → ratchet on the barrel arbor (with click and click spring) —
+exactly 1/5 barrel turn per crown turn; setting runs castle → s1 idler →
+two-tier s2 → minute wheel → cannon, exactly 10 minutes of hand travel per
+crown turn. Both ratios are asserted equal to the ones the physics uses.
+The hands mount on a real centre-post stack (centre arbor → cannon pinion
+pipe → hour-wheel pipe) through the dial's centre hole; racks pivot on
+plate studs under shoulder screws with return springs; the strike wheel's
+gathering pallet sweeps the quarter-rack teeth and drives the governor
+through an intermediate two-tier wheel.
+
 ## Acceptance tests
 
-`npm test` runs the eight suites from the spec against the headless
-`Movement`:
+`npm test` runs nine suites against the headless `Movement`:
 
 1. **Rate** — carriage 1 rev/60.0 s; 240 balance oscillations per rev.
 2. **Sustain/decay** — amplitude bands vs wind; smooth decay with impulse
@@ -104,6 +121,11 @@ detection and the audio synth remain hand-written per the ground rules).
    full 12:59 chime that never clips.
 8. **Teardown integrity** — layers/Z/transforms defined, presets exact,
    explode↔reassemble exactly reversible, simulation running while exploded.
+9. **Mechanical truth** — every declared gear mesh has exact centre
+   distance and axial tooth overlap; tooth phases stay locked through the
+   whole chain at arbitrary states (including the tourbillon epicyclic);
+   the keyless chain's ratios match the physics; the stem line clears
+   every wheel it passes.
 
 ## Controls
 

@@ -8,25 +8,32 @@ import * as THREE from 'three'
 
 const TAU = Math.PI * 2
 
-/** Involute-ish gear tooth outline (trapezoidal teeth on a disc). */
-export function gearShape(r: number, teeth: number, toothH: number, rootFrac = 0.36): THREE.Shape {
+/**
+ * Gear tooth outline cut about the PITCH radius r: tips at r + 0.9m, roots
+ * at r - 1.1m (m = 2r/teeth). Two gears whose centre distance equals the
+ * sum of their pitch radii therefore interleave with realistic clearance —
+ * this is what makes every mesh in layout.ts read as genuinely engaged.
+ * Tooth 0 is centred at local angle 0.175 x pitch (see layout.TOOTH_CENTER).
+ */
+export function gearShape(r: number, teeth: number): THREE.Shape {
+  const m = (2 * r) / teeth
+  const tipR = r + 0.9 * m
+  const rootR = r - 1.1 * m
   const s = new THREE.Shape()
-  const tipR = r + toothH
   for (let i = 0; i < teeth; i++) {
     const a = (i / teeth) * TAU
     const step = TAU / teeth
     const p = (f: number, rr: number) =>
       new THREE.Vector2(Math.cos(a + f * step) * rr, Math.sin(a + f * step) * rr)
-    if (i === 0) s.moveTo(p(0, r).x, p(0, r).y)
-    else s.lineTo(p(0, r).x, p(0, r).y)
-    s.lineTo(p(0.08, tipR).x, p(0.08, tipR).y)
-    s.lineTo(p(rootFrac - 0.06, tipR).x, p(rootFrac - 0.06, tipR).y)
-    s.lineTo(p(rootFrac, r).x, p(rootFrac, r).y)
-    // root arc to next tooth
+    if (i === 0) s.moveTo(p(0, rootR).x, p(0, rootR).y)
+    else s.lineTo(p(0, rootR).x, p(0, rootR).y)
+    s.lineTo(p(0.06, tipR).x, p(0.06, tipR).y)
+    s.lineTo(p(0.29, tipR).x, p(0.29, tipR).y)
+    s.lineTo(p(0.35, rootR).x, p(0.35, rootR).y)
     const segs = 3
     for (let k = 1; k <= segs; k++) {
-      const f = rootFrac + ((1 - rootFrac) * k) / segs
-      s.lineTo(p(f, r).x, p(f, r).y)
+      const f = 0.35 + (0.65 * k) / segs
+      s.lineTo(p(f, rootR).x, p(f, rootR).y)
     }
   }
   s.closePath()
@@ -52,32 +59,32 @@ function sectorHole(rIn: number, rOut: number, a0: number, a1: number): THREE.Pa
 
 export interface GearOpts {
   thickness?: number
-  toothH?: number
   spokes?: number
   hubR?: number
   rimW?: number
   holeR?: number
 }
 
+/** r is the PITCH radius; tooth size follows from the tooth count. */
 export function gearGeometry(r: number, teeth: number, opts: GearOpts = {}): THREE.ExtrudeGeometry {
   const {
     thickness = 3,
-    toothH = Math.max(1.6, r * 0.06),
     spokes = 5,
     hubR = Math.max(4, r * 0.16),
     rimW = Math.max(3, r * 0.14),
     holeR = 1.6,
   } = opts
-  const shape = gearShape(r, teeth, toothH)
+  const shape = gearShape(r, teeth)
   const hole = new THREE.Path()
   hole.absarc(0, 0, holeR, 0, TAU, true)
   shape.holes.push(hole)
-  if (spokes > 0 && r - rimW > hubR + 3) {
+  const rootR = r - (2.2 * r) / teeth
+  if (spokes > 0 && rootR - rimW > hubR + 3) {
     const gap = 0.16 // spoke angular half-width
     for (let i = 0; i < spokes; i++) {
       const a0 = (i / spokes) * TAU + gap
       const a1 = ((i + 1) / spokes) * TAU - gap
-      shape.holes.push(sectorHole(hubR + 2, r - rimW, a0, a1))
+      shape.holes.push(sectorHole(hubR + 2, rootR - rimW, a0, a1))
     }
   }
   const g = new THREE.ExtrudeGeometry(shape, {

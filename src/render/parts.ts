@@ -2,6 +2,7 @@ import { DEG, ESC_REVS_PER_CARRIAGE_REV, TAU } from '../core/constants'
 import type { Movement } from '../core/movement'
 import { RACK_IDLE } from '../core/repeater'
 import { hourSnailSteps, quarterSnailRadius } from '../core/snails'
+import * as LAYOUT from '../render3d/layout'
 
 /**
  * The watch is authored as a depth-ordered assembly stack (spec §5.5).
@@ -92,19 +93,21 @@ export function partTransform(p: Part, mv: Movement, depth: number): Transform {
   }
 }
 
-// --- fixed geometry of the calibre (world units, movement centre at 0,0) ---
+// --- fixed geometry of the calibre (world units, movement centre at 0,0).
+// Arbor positions and pitch radii come from render3d/layout.ts, where every
+// gear-mesh centre distance is solved and asserted. ---
 export const GEO = {
   movementR: 162,
   caseR: 212,
-  carriage: { x: 0, y: 88, r: 46 },
-  escOrbitR: 25.5, // escape wheel arbor distance from carriage centre
-  barrel: { x: -62, y: -56, r: 46 },
+  carriage: { x: LAYOUT.CARRIAGE_POS.x, y: LAYOUT.CARRIAGE_POS.y, r: 46 },
+  escOrbitR: LAYOUT.ESC_ORBIT_R, // escape pinion pitch orbit (fixed 4th + pinion)
+  barrel: { x: LAYOUT.barrel.x, y: LAYOUT.barrel.y, r: LAYOUT.BARREL_DRUM.r },
   center: { x: 0, y: 0 },
-  third: { x: 56, y: 42, r: 28 },
+  third: { x: LAYOUT.thirdWheel.x, y: LAYOUT.thirdWheel.y, r: LAYOUT.thirdWheel.r },
   hourStar: { x: -56, y: -34 },
-  minuteWheel: { x: -35, y: 16 },
-  strikeTrain: { x: -14, y: -88 },
-  governor: { x: -62, y: -112 },
+  minuteWheel: { x: LAYOUT.minuteWheel.x, y: LAYOUT.minuteWheel.y },
+  strikeTrain: { x: LAYOUT.strikeWheel.x, y: LAYOUT.strikeWheel.y },
+  governor: { x: LAYOUT.governorPinion.x, y: LAYOUT.governorPinion.y },
   hourRackPivot: { x: -122, y: 40 },
   quarterRackPivot: { x: 112, y: -54 },
   minuteRackPivot: { x: 98, y: 66 },
@@ -136,44 +139,46 @@ export const CONTACT = {
 
 const fmt = (x: number, digits = 1) => x.toFixed(digits)
 
-/** Assembled height of each part along the watch axis (world units). */
+/** Assembled height of each part along the watch axis (world units) —
+ * the group origin; builders place children at layout tier offsets. */
 const ZPOS: Record<string, number> = {
-  caseback: -6,
-  slideSpring: 0,
-  fixedFourth: 10,
-  barrel: 14,
-  centerWheel: 16,
-  thirdWheel: 16,
-  palletFork: 16,
-  carriage: 18,
-  escapeWheel: 18,
-  trainBridge: 8,
-  balance: 26,
-  tourbillonBridge: 6,
-  mainplate: 33,
-  motionWorks: 36,
-  hourStar: 38,
-  quarterSnail: 39,
-  surprisePiece: 40,
-  hourSnail: 41,
-  allOrNothing: 42,
-  minuteSnail: 43,
-  strikeTrain: 43,
-  flyGovernor: 43,
-  gongLow: 38,
-  gongHigh: 40,
-  hourRack: 45,
-  quarterRack: 45,
-  minuteRack: 45,
-  hammerLow: 45,
-  hammerHigh: 45,
-  dial: 52,
-  hourHand: 56,
-  minuteHand: 59,
-  caseband: 24,
-  crown: 26,
-  repeaterSlide: 26,
-  bezelCrystal: 66,
+  caseback: -9,
+  slideSpring: 24.5,
+  trainBridge: 3.5,
+  tourbillonBridge: 3.5,
+  barrel: 8,
+  centerWheel: 10.25,
+  thirdWheel: 8.5,
+  fixedFourth: 16,
+  keylessWorks: 20,
+  mainplate: 19.25,
+  carriage: 20,
+  escapeWheel: 19.75,
+  palletFork: 23.25,
+  balance: 30,
+  motionWorks: 25,
+  hourStar: 24,
+  hourSnail: 26.9,
+  surprisePiece: 28.9,
+  quarterSnail: 30.25,
+  minuteSnail: 33.2,
+  hourRack: 26.6,
+  quarterRack: 30.1,
+  minuteRack: 33.1,
+  strikeTrain: 28,
+  flyGovernor: 30.3,
+  allOrNothing: 30,
+  gongLow: 29,
+  gongHigh: 31,
+  hammerLow: 30,
+  hammerHigh: 32,
+  dial: 43,
+  hourHand: 46,
+  minuteHand: 48,
+  caseband: 17,
+  crown: 24.5,
+  repeaterSlide: 24.5,
+  bezelCrystal: 56,
 }
 
 export function buildParts(): Part[] {
@@ -206,7 +211,7 @@ export function buildParts(): Part[] {
       label: 'Mainspring barrel',
       layer: 'train',
       z: 10,
-      assembled: (mv) => ({ x: g.barrel.x, y: g.barrel.y, rot: mv.train.barrelAngle }),
+      assembled: (mv) => ({ x: g.barrel.x, y: g.barrel.y, rot: LAYOUT.renderedAngles(mv).barrel }),
       explodeDir: DIR_UP,
       hitRadius: g.barrel.r,
       liveState: (mv) => [
@@ -230,7 +235,7 @@ export function buildParts(): Part[] {
       label: 'Third wheel',
       layer: 'train',
       z: 12,
-      assembled: (mv) => ({ x: g.third.x, y: g.third.y, rot: -mv.train.thirdAngle }),
+      assembled: (mv) => ({ x: g.third.x, y: g.third.y, rot: LAYOUT.renderedAngles(mv).third }),
       explodeDir: DIR_UP,
       hitRadius: g.third.r,
       liveState: (mv) => [`8 rev/h`, `angle: ${fmt(((mv.train.thirdAngle / TAU) % 1) * 360)}°`],
@@ -338,6 +343,22 @@ export function buildParts(): Part[] {
       liveState: () => ['carries the dial-side works', 'tourbillon aperture at 6'],
     },
     {
+      id: 'keylessWorks',
+      label: 'Keyless works',
+      layer: 'train',
+      z: 16.8,
+      assembled: fixed(0, 0), // stem, castle, crown wheel, setting wheels: children
+      explodeDir: DIR_UP,
+      hitRadius: 40,
+      liveState: (mv) => [
+        mv.crownPulled
+          ? 'castle wheel pulled: setting (castle → s1 → s2 → minute wheel)'
+          : 'castle wheel home: winding (stem → crown wheel → ratchet)',
+        `crown: ${fmt(mv.crownAngle / TAU, 2)} turns`,
+        'wind 1/5 · set 1/6 per crown turn',
+      ],
+    },
+    {
       id: 'trainBridge',
       label: 'Train bridge',
       layer: 'train',
@@ -353,9 +374,9 @@ export function buildParts(): Part[] {
       label: 'Motion works',
       layer: 'dialside',
       z: 30,
-      assembled: (mv) => ({ x: g.minuteWheel.x, y: g.minuteWheel.y, rot: mv.train.minuteWheelAngle }),
+      assembled: fixed(0, 0), // children carry their own meshed rotations
       explodeDir: DIR_UP,
-      hitRadius: 20,
+      hitRadius: 44,
       liveState: (mv) => {
         const t = mv.displayedTime()
         return [`cannon 1 rev/h, hour wheel 1 rev/12 h`, `hands: ${t.h}:${String(t.m).padStart(2, '0')}`]
@@ -461,7 +482,7 @@ export function buildParts(): Part[] {
       label: 'Strike train & gathering pallet',
       layer: 'dialside',
       z: 39,
-      assembled: (mv) => ({ x: g.strikeTrain.x, y: g.strikeTrain.y, rot: mv.repeater.trainPhi }),
+      assembled: fixed(g.strikeTrain.x, g.strikeTrain.y), // wheel + intermediate rotate as children
       explodeDir: DIR_UP,
       hitRadius: 20,
       liveState: (mv) => [
@@ -474,7 +495,7 @@ export function buildParts(): Part[] {
       label: 'Fly governor',
       layer: 'dialside',
       z: 40,
-      assembled: (mv) => ({ x: g.governor.x, y: g.governor.y, rot: mv.repeater.trainPhi * 6 }),
+      assembled: (mv) => ({ x: g.governor.x, y: g.governor.y, rot: LAYOUT.renderedAngles(mv).governor }),
       explodeDir: DIR_UP,
       hitRadius: 18,
       liveState: (mv) => [

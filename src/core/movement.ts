@@ -1,4 +1,4 @@
-import { DT_PHYSICS, POWER_RESERVE_HOURS, TAU, DEG } from './constants'
+import { DT_PHYSICS, KEYLESS_SET_RATIO, KEYLESS_WIND_RATIO, POWER_RESERVE_HOURS, TAU, DEG } from './constants'
 import { Escapement } from './escapement'
 import { Mainspring } from './mainspring'
 import { TimingMachine } from './measurements'
@@ -27,6 +27,8 @@ export class Movement {
 
   dtPhysics = DT_PHYSICS
   crownPulled = false
+  /** Physical rotation of the crown/stem, rad (the crown visibly turns). */
+  crownAngle = 0
   regulator = 0 // -1..+1, moves the regulator index (rate adjust)
 
   private debt = 0
@@ -80,12 +82,15 @@ export class Movement {
    * in lockstep because they are geared to the same cannon pinion.
    */
   turnCrown(revs: number): void {
+    this.crownAngle += revs * TAU // the crown itself always turns
     if (this.crownPulled) {
-      // keyless works gearing: one crown rev = 10 minutes of hand travel
-      this.train.setHands(revs * (TAU / 6), this.t)
+      // castle -> setting wheels -> minute wheel -> cannon: exactly 1/6,
+      // i.e. ten minutes of hand travel per crown revolution
+      this.train.setHands(revs * TAU * KEYLESS_SET_RATIO, this.t)
     } else if (revs > 0) {
       const wasRunning = this.running
-      this.mainspring.wind(revs * 0.25) // click ratchet reduction
+      // stem 12t -> crown wheel -> ratchet 60t: 1/5 barrel turn per rev
+      this.mainspring.wind(revs * KEYLESS_WIND_RATIO)
       if (!wasRunning && this.mainspring.windFraction > 0.05) {
         this.esc.kick(200 * DEG) // the shake that restarts a stopped watch
       }

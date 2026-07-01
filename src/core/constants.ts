@@ -117,6 +117,15 @@ const tauImpFull = eOutAtTarget / (IMPULSE_ARC - UNLOCK_TORQUE_RATIO * UNLOCK_AR
 export const IMPULSE_GAIN = tauImpFull / (BARREL_TORQUE_FULL * 1.05) // 1.05 = curve value at full wind
 
 // ---------------------------------------------------------------------------
+// Keyless works (crown/stem) ratios — realised by the physical gear chain in
+// render3d/layout.ts, which asserts equality with these numbers.
+//   winding: stem 12t -> crown wheel 36/36t -> ratchet 60t = 1/5 barrel turn
+//   setting: castle 12t -> s2 48/8t -> minute wheel 36t -> cannon 12t = 1/6
+// ---------------------------------------------------------------------------
+export const KEYLESS_WIND_RATIO = (12 / 36) * (36 / 60) // 0.2 ratchet turn / crown turn
+export const KEYLESS_SET_RATIO = (12 / 48) * (8 / 36) * (36 / 12) // 1/6 cannon turn / crown turn
+
+// ---------------------------------------------------------------------------
 // Integration
 // ---------------------------------------------------------------------------
 export const DT_PHYSICS = 1e-4 // s of simulated time per physics sub-step
