@@ -1,4 +1,5 @@
 import { KEYLESS_SET_RATIO, KEYLESS_WIND_RATIO, TAU } from '../core/constants'
+import { ALL_OR_NOTHING_TRAVEL } from '../core/repeater'
 
 /**
  * The mechanical layout of the calibre: the single source of truth for
@@ -230,14 +231,19 @@ function hammerGeo(pivot: { x: number; y: number }, headTip: { x: number; y: num
   }
 }
 
-// low hammer: lifted by hour-rack AND quarter-rack teeth (tall pallet)
+// low hammer: lifted by hour-rack AND quarter-rack teeth (tall pallet).
+// Its arm is thinned so it passes between the two gong tubes.
 export const HAMMER_LOW = hammerGeo({ x: 108, y: -52 }, { x: 147, y: -28 }, 29, 25, 31.2)
+export const HAMMER_LOW_ARM_T = 1.8
 // high hammer: lifted by quarter-rack AND minute-rack teeth
-export const HAMMER_HIGH = hammerGeo({ x: 94, y: -64 }, { x: 140, y: -42 }, 31, 29, 34.2)
+export const HAMMER_HIGH = hammerGeo({ x: 94, y: -64 }, { x: 140, y: -42 }, 31.5, 29, 34.2)
+export const HAMMER_HIGH_ARM_T = 2.4
 
-/** Gong bands (start radius spirals inward 17 units over 1.9 wraps). */
+/** Gong bands (start radius spirals inward 17 units over 1.9 wraps).
+ * The high gong rides half a tier above the low one so the low hammer's
+ * arm passes beneath it on the way to the outer gong. */
 export const GONG_LOW = { rStart: 156, z: 29 }
-export const GONG_HIGH = { rStart: 149, z: 31 }
+export const GONG_HIGH = { rStart: 149, z: 31.5 }
 
 
 // --------------------------------------------------------------------- //
@@ -449,3 +455,66 @@ export function escapePinionAngle(carriageAngle: number): number {
   )
   return rel + carriageAngle
 }
+
+// --------------------------------------------------------------------- //
+// Winding pinion & contrate mesh phase.
+//
+// The winding pinion is rigidly geared to the ratchet (5 pinion turns per
+// barrel turn through the crown wheel), so its rotation is a pure function
+// of the wind state. Because one unit of mainspring wind advances BOTH the
+// pinion and the contrate ring by exactly 60 of their own tooth pitches,
+// their relative pitch fraction is a constant of assembly: the ring's
+// mounting offset below sets it to a half pitch, so a pinion tooth always
+// dips into a ring gap at the mesh zone (plan x = crownWheel.x).
+// --------------------------------------------------------------------- //
+
+/** Winding-pinion rotation about the stem axis (rad) for a wind state. */
+export function windingPinionAngle(turns: number): number {
+  return (turns / KEYLESS_WIND_RATIO) * TAU
+}
+
+const P12 = TAU / 12
+const P36 = TAU / 36
+
+/** Pitch fraction of the pinion tooth nearest its bottom (mesh) point. */
+export function windingPinionPitchFrac(turns: number): number {
+  const rotX = -windingPinionAngle(turns) // three.js rotation.x applied
+  const f = (rotX + TOOTH_CENTER(12) + Math.PI / 2) / P12
+  return f - Math.floor(f)
+}
+
+/** Pitch fraction of the contrate face tooth nearest the mesh zone, for a
+ * given ring mounting offset (rad, in the crown wheel's local frame). */
+export function contrateRingPitchFrac(turns: number, ringOffset: number): number {
+  const ratchetAngle = -turns * TAU
+  const cwRot3 = -meshedAngle(ratchetAngle, ratchet, crownWheel)
+  const f = (cwRot3 + ringOffset + Math.PI / 2) / P36
+  return f - Math.floor(f)
+}
+
+/** Ring mounting offset putting a ring GAP under every bottoming pinion
+ * tooth — computed once; exact for all wind states (see note above). */
+export function contrateRingOffset(): number {
+  const want = windingPinionPitchFrac(0) + 0.5
+  const raw = contrateRingPitchFrac(0, 0)
+  return ((want - raw) % 1) * P36
+}
+
+// --------------------------------------------------------------------- //
+// Repeater slide latch: the slide's lever carries a pin travelling +y as
+// the slide is pushed; the all-or-nothing hook's notch face sits at the
+// pin's position at EXACTLY the latch travel, so the drawn geometry and
+// the core's interlock threshold are one and the same number.
+// --------------------------------------------------------------------- //
+export const SLIDE_TRAVEL_UNITS = 34 // world units of slide movement, travel 0..1
+export { ALL_OR_NOTHING_TRAVEL } // the core's own latch threshold
+export const SLIDE_PIN = { x: -152, y0: 8 } // pin path: (x, y0 + travel*units)
+export const AON_PIVOT = { x: -136, y: 34 }
+/** The hook's notch face, where the pin arrives at latch travel. */
+export const AON_NOTCH_Y = SLIDE_PIN.y0 + ALL_OR_NOTHING_TRAVEL * SLIDE_TRAVEL_UNITS
+
+check(
+  Math.abs(AON_NOTCH_Y - (SLIDE_PIN.y0 + 0.85 * SLIDE_TRAVEL_UNITS)) < 1e-9,
+  'all-or-nothing notch sits at exactly 85% slide travel',
+)
+check(Math.hypot(AON_PIVOT.x - SLIDE_PIN.x, AON_PIVOT.y - AON_NOTCH_Y) < 22, 'hook reaches the pin path')

@@ -82,18 +82,25 @@ export class Movement {
    * in lockstep because they are geared to the same cannon pinion.
    */
   turnCrown(revs: number): void {
-    this.crownAngle += revs * TAU // the crown itself always turns
     if (this.crownPulled) {
       // castle -> setting wheels -> minute wheel -> cannon: exactly 1/6,
       // i.e. ten minutes of hand travel per crown revolution
+      this.crownAngle += revs * TAU
       this.train.setHands(revs * TAU * KEYLESS_SET_RATIO, this.t)
     } else if (revs > 0) {
       const wasRunning = this.running
-      // stem 12t -> crown wheel -> ratchet 60t: 1/5 barrel turn per rev
-      this.mainspring.wind(revs * KEYLESS_WIND_RATIO)
+      // stem 12t -> crown wheel -> ratchet 60t: 1/5 barrel turn per rev.
+      // The chain is solid: once the mainspring is wound flat the click
+      // holds the ratchet and the crown physically stops.
+      const wound = this.mainspring.wind(revs * KEYLESS_WIND_RATIO)
+      this.crownAngle += (wound / KEYLESS_WIND_RATIO) * TAU
       if (!wasRunning && this.mainspring.windFraction > 0.05) {
         this.esc.kick(200 * DEG) // the shake that restarts a stopped watch
       }
+    } else {
+      // backward with the crown pushed home: the castle's saw dogs ratchet
+      // over the winding pinion (the classic zip) — crown turns, chain holds
+      this.crownAngle += revs * TAU
     }
   }
 

@@ -172,6 +172,38 @@ describe('gear layout is mechanically true', () => {
     expect(mv.drainStrikes().length).toBe(2 + 2 + 1)
   })
 
+  it('winding is one-way and solid: crown stops dead at full wind', () => {
+    const mv = new Movement({ h: 12, m: 0 })
+    mv.mainspring.turns = 5.7 - 0.1 // almost full
+    const a0 = mv.crownAngle
+    mv.turnCrown(3) // asks for 0.6 turns of wind; only 0.1 fits
+    expect(mv.mainspring.turns).toBeCloseTo(5.7, 10)
+    // the crown advanced only as far as the chain allowed: 0.1/0.2 revs
+    expect(mv.crownAngle - a0).toBeCloseTo(0.5 * TAU, 8)
+    mv.turnCrown(2) // spring solid: the crown cannot turn forward at all
+    expect(mv.crownAngle - a0).toBeCloseTo(0.5 * TAU, 8)
+    // backward, pushed in: the castle ratchets — crown turns, no unwinding
+    mv.turnCrown(-1)
+    expect(mv.crownAngle - a0).toBeCloseTo(-0.5 * TAU, 8)
+    expect(mv.mainspring.turns).toBeCloseTo(5.7, 10)
+  })
+
+  it('contrate mesh: pinion and face-ring pitch phases stay half-a-tooth apart', () => {
+    const off = L.contrateRingOffset()
+    for (const turns of [0, 0.37, 1.234, 3.1, 5.55]) {
+      const rel =
+        L.windingPinionPitchFrac(turns) - L.contrateRingPitchFrac(turns, off)
+      const norm = ((rel % 1) + 1) % 1
+      expect(Math.abs(norm - 0.5), `turns=${turns}`).toBeLessThan(0.02)
+    }
+  })
+
+  it('the all-or-nothing notch is cut at exactly the latch travel', () => {
+    // drawn notch position == pin position at the core threshold (0.85)
+    expect(L.AON_NOTCH_Y).toBeCloseTo(L.SLIDE_PIN.y0 + 0.85 * L.SLIDE_TRAVEL_UNITS, 10)
+    expect(L.ALL_OR_NOTHING_TRAVEL).toBe(0.85)
+  })
+
   it('the stem line is clear of every wheel it passes over', () => {
     // stem: y=0, z=24.5, from x=74 outward. No wheel tier may intersect it.
     for (const m of L.SPUR_MESHES) {

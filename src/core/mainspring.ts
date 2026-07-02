@@ -32,9 +32,14 @@ export class Mainspring {
     return BARREL_TORQUE_FULL * working * cliff
   }
 
-  /** Crown winding: add turns (ratchet ensures it only goes up). */
-  wind(turns: number): void {
-    if (turns > 0) this.turns = Math.min(MAINSPRING_MAX_TURNS, this.turns + turns)
+  /** Crown winding: add turns (ratchet ensures it only goes up).
+   * Returns the turns ACTUALLY added — zero once the spring is solid,
+   * which is what stops the crown dead at full wind. */
+  wind(turns: number): number {
+    if (turns <= 0) return 0
+    const before = this.turns
+    this.turns = Math.min(MAINSPRING_MAX_TURNS, this.turns + turns)
+    return this.turns - before
   }
 
   /**

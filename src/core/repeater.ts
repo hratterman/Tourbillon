@@ -100,7 +100,7 @@ interface GatherSlot {
 const GOV_TORQUE_FULL = 60 // rad/s^2 at full charge, fresh spring
 const GOV_DRAG = 0.78 // quadratic air drag of the fly: terminal w = sqrt(tq/drag)
 const SPRING_TRAVEL_CAP = 240 // rad of train travel the slide push can supply
-const ALL_OR_NOTHING_TRAVEL = 0.85
+export const ALL_OR_NOTHING_TRAVEL = 0.85
 const GAP_REVS = 1 // blank revolution between hour/quarter/minute groups
 
 /**

@@ -97,6 +97,14 @@ crown wheel → ratchet on the barrel arbor (with click and click spring) —
 exactly 1/5 barrel turn per crown turn; setting runs castle → s1 idler →
 two-tier s2 → minute wheel → cannon, exactly 10 minutes of hand travel per
 crown turn. Both ratios are asserted equal to the ones the physics uses.
+Winding is one-way and solid: the click holds the ratchet, so the crown
+stops dead at full wind and backward turns simply ratchet the castle's saw
+dogs over the held winding pinion; the winding pinion is rigidly geared to
+the ratchet, and the crown wheel's contrate face-ring is mounted at the
+offset that keeps a ring gap under every bottoming pinion tooth (the
+crossed-axis mesh is phase-locked too, asserted). The slide's lever carries
+a pin whose drawn all-or-nothing notch is cut at exactly the core's 85%
+latch travel.
 The hands mount on a real centre-post stack (centre arbor → cannon pinion
 pipe → hour-wheel pipe) through the dial's centre hole; racks pivot on
 plate studs under shoulder screws with return springs; all three racks' toothed sectors
