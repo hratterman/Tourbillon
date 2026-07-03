@@ -13,7 +13,7 @@ never off the clock.
 ```bash
 npm install
 npm run dev    # interactive simulator
-npm test       # the eight acceptance suites (headless, no browser needed)
+npm test       # the ten acceptance suites (headless, no browser needed)
 npm run build  # type-check + production bundle
 ```
 
@@ -90,38 +90,66 @@ Every arbor position, pitch radius (r = module × teeth / 2), tooth count
 and z-tier lives in one audited module. Every spur mesh's centre distance
 equals the sum of pitch radii; tooth tiers overlap axially; driven wheels
 render tooth-phase-locked to their drivers (`meshedAngle`), so teeth
-genuinely interleave at any zoom. The **keyless works** is a real chain:
-crown → stem → winding pinion ⇄ sliding castle wheel (dog clutch opens and
-the castle slides to the setting wheels when you pull the crown) → contrate
-crown wheel → ratchet on the barrel arbor (with click and click spring) —
-exactly 1/5 barrel turn per crown turn; setting runs castle → s1 idler →
-two-tier s2 → minute wheel → cannon, exactly 10 minutes of hand travel per
-crown turn. Both ratios are asserted equal to the ones the physics uses.
-Winding is one-way and solid: the click holds the ratchet, so the crown
-stops dead at full wind and backward turns simply ratchet the castle's saw
-dogs over the held winding pinion; the winding pinion is rigidly geared to
-the ratchet, and the crown wheel's contrate face-ring is mounted at the
-offset that keeps a ring gap under every bottoming pinion tooth (the
-crossed-axis mesh is phase-locked too, asserted). The slide's lever carries
-a pin whose drawn all-or-nothing notch is cut at exactly the core's 85%
-latch travel.
+genuinely interleave at any zoom.
+
+**The open caseback shows real architecture.** The back of the movement is
+bridgework, exactly as a watchmaker expects: a barrel bridge (audited
+outline, jewelled centre and transfer bearings, feet and screws) and the
+tourbillon cock carry every lower pivot, and the RATCHET, CROWN WHEEL and
+CLICK ride the barrel bridge's back face — the classic winding cluster in
+plain view. The stem, far up at the dial side, reaches them through an
+intermediate transfer wheel (winding pinion ⇄ contrate ring on a tall
+arbor down to a spur at the bridge): 12/36 × 36/36 × 36/60 = exactly the
+1/5 barrel turn per crown turn the physics uses. The dial side gets its
+own strike bridge over the gathering staff, intermediate and governor.
+
+**Pulling the crown is a real mechanism.** The stem is cut like a real
+stem — tip pivot (running in a pierced boss on the plate), square,
+winding-pinion seat, setting-lever groove, hub. The SETTING LEVER's pin
+rides the groove; pulling the stem rotates the lever, which throws the
+YOKE, whose fork (riding the castle's waist groove) slides the castle
+inboard off the winding pinion's dogs and onto the setting idler. Both
+lever angles are solved exactly from the geometry for each crown position
+and asserted. Setting runs castle → s1 idler → two-tier s2 → minute
+wheel → cannon, exactly 10 minutes of hand travel per crown turn.
+Winding is one-way and solid: the click holds the ratchet, the crown
+stops dead at full wind, backward turns ratchet the castle's saw dogs
+over the held pinion, and the transfer's contrate face-ring is mounted at
+the offset that keeps a ring gap under every bottoming pinion tooth
+(phase-locked, asserted). The slide's lever carries a pin whose drawn
+all-or-nothing notch is cut at exactly the core's 85% latch travel.
+
+**Nothing occupies the same space twice.** Every part contributes solid
+volumes (swept envelopes for everything that moves — racks through their
+full fall, hammers at rest and fully cocked, the castle across its
+travel); a collision audit tests every cross-part pair against a
+whitelist naming only real engagements (meshes, bearings, pallets in
+tooth paths), and the acceptance suite requires ZERO interpenetrations.
+That audit drove the architecture: the barrel module grew so its arbor
+clears the centre wheel's teeth, the drum wall thinned under the centre
+wheel, the hour wheel rides ABOVE the quarter/minute snail stack on a
+tall minute-wheel pinion (a real repeater constraint), the strike wheel
+ducked under all three rack tiers so only its gathering pallets rise into
+their paths, the fly's vanes dropped below the racks, the high gong/hammer
+plane rose above the minute rack, both hammers found pivots outside every
+rack's swept sector, the high hammer's arm is a dog-leg, the plate is
+milled with a keyless slot and a transfer-ring recess, and the gong block
+sits radially outside every inner coil pass.
 The hands mount on a real centre-post stack (centre arbor → cannon pinion
 pipe → hour-wheel pipe) through the dial's centre hole; racks pivot on
-plate studs under shoulder screws with return springs; all three racks' toothed sectors
-converge on the strike wheel's three-tier gathering pallet staff (one
-pallet per rack tier, like a real stacked-rack repeater), which drives the
-governor through an intermediate two-tier wheel; the hammers pivot between
-the cluster and the gongs — long arms out to the gong band, tall lifting
-pallets back into the racks' tooth paths — and their cocking is driven
-geometrically by the strike train's approach to each strike, dropping
-exactly on it. The hairspring genuinely breathes: its outer terminal stays
-pinned to the carriage stud while the inner end follows the staff through
-±300°, and the balance's upper pivot carries a cap jewel under a
-three-armed anti-shock spring.
+plate studs under shoulder screws with return springs; all three racks'
+toothed sectors converge on the strike wheel's three-tier gathering pallet
+staff, which drives the governor through an intermediate two-tier wheel;
+the hammers' heads are aimed at their gong's INNER coil (computed from the
+same spiral the tube is drawn from, at the audited strike gap) and their
+cocking is driven geometrically by the strike train's approach to each
+strike, dropping exactly on it. The hairspring genuinely breathes inside
+cage pillars that arch around it, and the balance's upper pivot carries a
+cap jewel under a three-armed anti-shock spring.
 
 ## Acceptance tests
 
-`npm test` runs nine suites against the headless `Movement`:
+`npm test` runs ten suites against the headless `Movement`:
 
 1. **Rate** — carriage 1 rev/60.0 s; 240 balance oscillations per rev.
 2. **Sustain/decay** — amplitude bands vs wind; smooth decay with impulse
@@ -139,9 +167,13 @@ three-armed anti-shock spring.
    explode↔reassemble exactly reversible, simulation running while exploded.
 9. **Mechanical truth** — every declared gear mesh has exact centre
    distance and axial tooth overlap; tooth phases stay locked through the
-   whole chain at arbitrary states (including the tourbillon epicyclic);
-   the keyless chain's ratios match the physics; the stem line clears
-   every wheel it passes.
+   whole chain at arbitrary states (including the tourbillon epicyclic
+   and the 90° contrate turn); the keyless chain's ratios match the
+   physics; the pull linkage's lever pin and yoke fork land exactly; the
+   stem line clears every wheel it passes.
+10. **Collision audit** — every cross-part volume pair (swept envelopes
+    included) is tested; only whitelisted DESIGNED engagements may touch;
+    the assembled movement has zero interpenetrations.
 
 ## Controls
 

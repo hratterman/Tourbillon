@@ -103,16 +103,32 @@ describe('gear layout is mechanically true', () => {
   })
 
   it('castle wheel geometry: dogs engaged at rest, spur over s1 when pulled', () => {
-    // dog faces adjacent at rest
-    const castleDogFace = L.CASTLE.xRest - L.CASTLE.w / 2
-    const wpDogFace = L.WINDING_PINION.x + L.WINDING_PINION.w / 2
-    expect(castleDogFace - wpDogFace).toBeGreaterThan(0)
-    expect(castleDogFace - wpDogFace).toBeLessThan(2.5)
-    // pulled: spur ring sits over the setting idler
-    const pulledOuterEnd = L.CASTLE.xRest + L.CASTLE.pull
-    expect(Math.abs(pulledOuterEnd - L.s1Idler.x)).toBeLessThan(1)
+    // the castle sits INBOARD of the winding pinion; dog faces adjacent at rest
+    const castleDogFace = L.CASTLE.xRest + L.CASTLE.w / 2
+    const wpDogFace = L.WINDING_PINION.x - L.WINDING_PINION.w / 2
+    expect(wpDogFace - castleDogFace).toBeGreaterThan(0)
+    expect(wpDogFace - castleDogFace).toBeLessThan(2.5)
+    // pulled: the yoke slides the castle INBOARD, spur ring over the idler
+    const pulledSpurX = L.castleX(true) + L.CASTLE_SPUR_OFF
+    expect(Math.abs(pulledSpurX - L.s1Idler.x)).toBeLessThan(1)
     // and the idler's tooth tips just reach the castle's spur circle
     expect(Math.abs(Math.abs(L.s1Idler.y) - (L.s1Idler.r + L.CASTLE.r))).toBeLessThan(0.05)
+  })
+
+  it('the pull linkage is solved, not faked: pin in groove, fork on castle', () => {
+    for (const pulled of [false, true]) {
+      // the setting-lever pin stays under the stem, tracking the groove
+      const pin = L.settingLeverPin(pulled)
+      expect(Math.abs(pin.y)).toBeLessThan(1.2)
+      expect(pin.x).toBeCloseTo(L.STEM_GROOVE.x + (pulled ? L.CASTLE.pull : 0), 9)
+      // the yoke's solved angle places its fork tip exactly at the castle
+      // groove's x for that crown position
+      const f0 = { x: L.castleX(false) + L.CASTLE_GROOVE.off - L.YOKE.pivot.x, y: L.YOKE.tipY - L.YOKE.pivot.y }
+      const len = Math.hypot(f0.x, f0.y)
+      const az = Math.atan2(f0.y, f0.x) + L.yokeAngle(pulled)
+      const fx = L.YOKE.pivot.x + Math.cos(az) * len
+      expect(fx).toBeCloseTo(L.castleX(pulled) + L.CASTLE_GROOVE.off, 6)
+    }
   })
 
   it('repeater cluster: racks reach the gathering staff, hammers reach racks and gongs', () => {
@@ -142,10 +158,9 @@ describe('gear layout is mechanically true', () => {
         expect(h.tailZ0).toBeLessThanOrEqual(L.RACK_GEO.quarter.z0 + 0.6)
         expect(h.tailZ1).toBeGreaterThanOrEqual(L.RACK_GEO.minute.z1 - 0.6)
       }
-      // head lands in its gong's radial band
+      // striking face sits at the strike gap off the gong's INNER coil
       const r = Math.hypot(h.headTip.x, h.headTip.y)
-      expect(r, name).toBeGreaterThan(g.rStart - 17)
-      expect(r, name).toBeLessThan(g.rStart + 1)
+      expect(r, name).toBeCloseTo(L.gongInnerCoil(g, h.headAz) - g.tubeR - L.HAMMER_GAP, 9)
     }
   })
 
@@ -205,14 +220,28 @@ describe('gear layout is mechanically true', () => {
   })
 
   it('the stem line is clear of every wheel it passes over', () => {
-    // stem: y=0, z=24.5, from x=74 outward. No wheel tier may intersect it.
+    // stem: y=0, z=24.5, from its tip pivot outward. No wheel tier may
+    // intersect it (the winding pinion and castle ride ON it — same part).
     for (const m of L.SPUR_MESHES) {
       for (const w of [m.a, m.b]) {
         if (w.z1 < L.STEM_Z - L.STEM_R || w.z0 > L.STEM_Z + L.STEM_R) continue // clear in z
         // wheel tier crosses the stem plane: it must not reach the stem line
         const nearestX = w.x + Math.sqrt(Math.max(0, w.r * w.r - w.y * w.y))
-        expect(Math.abs(w.y) > w.r || nearestX < 74, `stem clashes ${w.teeth}t wheel`).toBe(true)
+        expect(Math.abs(w.y) > w.r || nearestX < L.STEM_TIP.x0 - 0.4, `stem clashes ${w.teeth}t wheel`).toBe(true)
       }
     }
+  })
+
+  it('the winding chain reaches through the transfer wheel with exact meshes', () => {
+    // transfer spur ⇄ crown wheel ⇄ ratchet all live on the bridge's back
+    // face; centre distances are asserted at module load — here, check the
+    // phase lock across the 90° turn stays consistent with the ratio
+    const mv = new Movement({ h: 12, m: 0 })
+    mv.mainspring.turns = 1.23
+    const a = L.renderedAngles(mv)
+    const res1 = L.meshResidual(a.crownWheel, L.crownWheel, a.ratchet, L.ratchet)
+    const res2 = L.meshResidual(a.crownWheel, L.crownWheel, a.transfer, L.transferWheel)
+    expect(res1).toBeLessThan((TAU / L.ratchet.teeth) * 0.02)
+    expect(res2).toBeLessThan((TAU / L.transferWheel.teeth) * 0.02)
   })
 })

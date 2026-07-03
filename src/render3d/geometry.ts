@@ -241,8 +241,9 @@ export function starGeometry(r: number, points = 12, thickness = 1.8): THREE.Ext
   return g
 }
 
-/** Sword hand pointing along local +Y. */
-export function handGeometry(len: number, w: number, thickness = 1.2): THREE.ExtrudeGeometry {
+/** Sword hand pointing along local +Y. `holeR` must clear whatever pipe
+ * continues up through the hand's plane. */
+export function handGeometry(len: number, w: number, thickness = 1.2, holeR = w * 0.4): THREE.ExtrudeGeometry {
   const s = new THREE.Shape()
   s.moveTo(0, -len * 0.16)
   s.lineTo(-w, 0)
@@ -252,7 +253,7 @@ export function handGeometry(len: number, w: number, thickness = 1.2): THREE.Ext
   s.lineTo(w, 0)
   s.closePath()
   const hole = new THREE.Path()
-  hole.absarc(0, 0, w * 0.4, 0, TAU, true)
+  hole.absarc(0, 0, holeR, 0, TAU, true)
   s.holes.push(hole)
   const g = new THREE.ExtrudeGeometry(s, {
     depth: thickness,

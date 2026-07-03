@@ -70,6 +70,16 @@ function box(w: number, h: number, d: number, m: THREE.Material, x = 0, y = 0, z
   return mesh(new THREE.BoxGeometry(w, h, d), m, x, y, z)
 }
 
+/** Flat lever arm from the local origin to `end` (three local coords). */
+function armTo(mats: Materials, end: { x: number; y: number }, w: number, t: number): THREE.Mesh {
+  const len = Math.hypot(end.x, end.y)
+  const g = new THREE.BoxGeometry(len, w, t)
+  g.translate(len / 2, 0, 0)
+  const m = mesh(g, mats.steelBrushed)
+  m.rotation.z = Math.atan2(end.y, end.x)
+  return m
+}
+
 /** Gold chaton with a ruby jewel — the classic bearing. */
 function jewel(mats: Materials, r = 4.2): THREE.Group {
   const g = new THREE.Group()
@@ -138,49 +148,44 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
     }
     // ----------------------------------------------------------- bridges
     case 'trainBridge': {
-      // barrel bridge: covers barrel + centre lower pivots (z 1..6)
-      const pts: Array<[number, number]> = [
-        [-24, -18], [-30, 6], [-20, 26], [4, 36], [30, 46], [56, 48], [70, 36],
-        [74, 14], [64, -8], [42, -18], [14, -24],
-      ]
-      const holes = [
-        { x: 0, y: 0, r: 2.6 }, // centre arbor
-        { x: L.barrel.x, y: -L.barrel.y, r: 3.6 }, // barrel arbor
-      ]
-      group.add(mesh(plateGeometry(pts, 5, holes), mats.plate))
-      for (const h of holes) {
+      // barrel bridge, exactly the audited outline: carries the barrel
+      // arbor bushing, the centre and transfer lower bearings, the click
+      // stud and the crown-wheel core. Anchor (0,0), zPos = bridge centre.
+      buildBridge(group, mats, L.BARREL_BRIDGE, { x: 0, y: 0 }, 0)
+      for (const h of [L.BARREL_BRIDGE.holes[0], L.BARREL_BRIDGE.holes[2]]) {
         const j = jewel(mats, h.r + 1.6)
-        j.position.set(h.x, h.y, -2.9)
+        j.position.set(h.x, -h.y, -L.Z.bridges.z1 + 1.2)
         group.add(j)
       }
-      for (const [sx, sy] of [[-22, 20], [66, 28]] as const) {
-        const sc = screw(mats)
-        sc.position.set(sx, sy, -2.9)
-        sc.rotation.y = Math.PI // heads face the case back
-        group.add(sc)
-      }
+      // crown-wheel core: post down to the back tier + retaining screw
+      const post = cyl(2.5, L.Z.bridges.z0 - L.BACK_TIER.z0, mats.steel, L.crownWheel.x, -L.crownWheel.y, (L.Z.bridges.z0 + L.BACK_TIER.z0) / 2)
+      group.add(post)
+      const cs = screw(mats, 3.3)
+      cs.position.set(L.crownWheel.x, -L.crownWheel.y, L.BACK_TIER.z0 - 0.7)
+      cs.rotation.y = Math.PI
+      group.add(cs)
       break
     }
     case 'tourbillonBridge': {
-      // flying tourbillon cock: carries the carriage AND third-wheel lower
+      // tourbillon cock: carries the carriage AND third-wheel lower
       // pivots, reaching in from the 6 o'clock edge (anchor = carriage axis)
-      const pts: Array<[number, number]> = [
-        [-16, -64], [16, -64], [20, -28], [14, 20], [9, 36], [-9, 36], [-14, 20], [-20, -28],
-      ]
-      const holes = [
-        { x: 0, y: 0, r: 2.4 }, // carriage lower pivot
-        { x: 0, y: 31.9, r: 2 }, // third-wheel lower pivot (0, 56.13 watch)
-      ]
-      group.add(mesh(plateGeometry(pts, 5, holes), mats.plate))
-      for (const h of holes) {
+      buildBridge(group, mats, L.TOURB_BRIDGE, L.CARRIAGE_POS, 0)
+      for (const h of L.TOURB_BRIDGE.holes) {
         const j = jewel(mats, h.r + 1.8)
-        j.position.set(h.x, h.y, -2.9)
+        j.position.set(h.x - L.CARRIAGE_POS.x, -(h.y - L.CARRIAGE_POS.y), -L.Z.bridges.z1 + 1.2)
         group.add(j)
       }
-      const sc = screw(mats, 3.6)
-      sc.position.set(0, -56, -2.9)
-      sc.rotation.y = Math.PI
-      group.add(sc)
+      break
+    }
+    case 'strikeBridge': {
+      // dial-side cock over the strike train: upper pivots for the
+      // gathering staff, intermediate wheel and fly governor
+      buildBridge(group, mats, L.STRIKE_BRIDGE_SPEC, { x: L.strikeWheel.x, y: L.strikeWheel.y }, 1)
+      for (const h of L.STRIKE_BRIDGE_SPEC.holes) {
+        const j = jewel(mats, h.r + 1.5)
+        j.position.set(h.x - L.strikeWheel.x, -(h.y - L.strikeWheel.y), L.STRIKE_BRIDGE.z1 - L.STRIKE_BRIDGE.z0 - 0.4)
+        group.add(j)
+      }
       break
     }
     case 'mainplate': {
@@ -189,30 +194,28 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
         const a = (i / 96) * TAU
         outline.push([Math.cos(a) * 162, Math.sin(a) * 162])
       }
-      const holes = [
-        { x: 0, y: -88, r: 51 }, // tourbillon well
-        { x: 0, y: 0, r: 8.6 }, // centre: cannon + hour pipes
-        { x: L.barrel.x, y: -L.barrel.y, r: 28.6 }, // ratchet opening
-        { x: L.crownWheel.x, y: -L.crownWheel.y, r: 17.5 }, // crown-wheel recess
-        { x: L.s2Wheel.x, y: -L.s2Wheel.y, r: 22.4 }, // setting-wheel recess
-        { x: L.s1Idler.x, y: -L.s1Idler.y, r: 9 },
-        { x: L.thirdWheel.x, y: -L.thirdWheel.y, r: 3 }, // third upper pivot
-        { x: -56, y: 34, r: 3 }, // hour-star stud
-        { x: L.strikeWheel.x, y: -L.strikeWheel.y, r: 2.6 },
-        { x: L.strikeInterWheel.x, y: -L.strikeInterWheel.y, r: 2.4 },
-        { x: L.governorPinion.x, y: -L.governorPinion.y, r: 2.4 },
-      ]
-      group.add(mesh(plateGeometry(outline, 4.5, holes), mats.plate))
-      // movement pillars down to the bridges + fixing screws
-      for (const az of [60, 150, 250]) {
-        const a = (az * Math.PI) / 180
-        const px = Math.cos(a) * 152
-        const py = -Math.sin(a) * 152
-        group.add(cyl(4, 11, mats.brassBrushed, px, py, -7.75))
-        const sc = screw(mats)
-        sc.position.set(px, py, 2.9)
-        group.add(sc)
-      }
+      // every bore from the audited list (watch coords -> three: flip y),
+      // as two slabs: the lower also carries the transfer-ring recess,
+      // both carry the milled keyless slot under the castle & pinion
+      const flip = (h: { x: number; y: number; r: number }) => ({ x: h.x, y: -h.y, r: h.r })
+      const lowHoles = [...L.MAINPLATE_HOLES, ...L.KEYLESS_SLOT, L.TRANSFER_RECESS].map(flip)
+      const upHoles = [...L.MAINPLATE_HOLES, ...L.KEYLESS_SLOT].map(flip)
+      const lower = mesh(plateGeometry(outline, L.PLATE_SPLIT_Z - L.Z.plate.z0, lowHoles), mats.plate)
+      lower.position.z = (L.Z.plate.z0 + L.PLATE_SPLIT_Z) / 2 - 19.25
+      group.add(lower)
+      const upper = mesh(plateGeometry(outline, L.Z.plate.z1 - L.PLATE_SPLIT_Z, upHoles), mats.plate)
+      upper.position.z = (L.PLATE_SPLIT_Z + L.Z.plate.z1) / 2 - 19.25
+      group.add(upper)
+      // stem-tip support: pierced block on the dial face — the stem's tip
+      // pivot runs in its horizontal bore
+      const B = L.STEM_BOSS
+      const kz = L.STEM_Z - 19.25
+      group.add(box(2 * B.hw, 2 * (B.boreHalf + B.wallW), B.z1 - (L.STEM_Z + B.boreHalf), mats.plate, B.x, 0, (L.STEM_Z + B.boreHalf + B.z1) / 2 - 19.25))
+      group.add(box(2 * B.hw, 2 * (B.boreHalf + B.wallW), L.STEM_Z - B.boreHalf - B.z0, mats.plate, B.x, 0, (B.z0 + L.STEM_Z - B.boreHalf) / 2 - 19.25))
+      for (const s of [-1, 1]) group.add(box(2 * B.hw, B.wallW, 2 * B.boreHalf, mats.plate, B.x, s * (B.boreHalf + B.wallW / 2), kz))
+      // studs for the setting lever and the yoke (dial side)
+      group.add(cyl(1.9, 2.1, mats.steel, L.SETTING_LEVER.pivot.x, -L.SETTING_LEVER.pivot.y, 2.25 + 1.05))
+      group.add(cyl(1.9, 2.1, mats.steel, L.YOKE.pivot.x, -L.YOKE.pivot.y, 2.25 + 1.05))
       for (const [jx, jy] of [
         [L.thirdWheel.x, -L.thirdWheel.y],
         [L.strikeWheel.x, -L.strikeWheel.y],
@@ -243,21 +246,25 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       const rim = gearOf(L.barrel, mats.brass, { spokes: 0, rimW: 4, holeR: drum.r - 5 })
       rim.position.z = tierZ(L.barrel, zp)
       group.add(rim)
-      // arbor with its square, through the bridge below and ratchet above
+      // arbor: down through the barrel bridge to the ratchet's square,
+      // up to the drum's top bearing
       const arbor = new THREE.Group()
-      arbor.add(cyl(3.2, 19, mats.steel, 0, 0, -0.5))
-      arbor.add(box(4.6, 4.6, 3.4, mats.steel, 0, 0, tierZ(L.ratchet, zp)))
+      arbor.add(cyl(3.2, 19.6, mats.steel, 0, 0, (-5.6 + 14) / 2 - zp))
+      arbor.add(box(4.6, 4.6, 2.6, mats.steel, 0, 0, tierZ(L.ratchet, zp)))
       group.add(arbor)
-      // ratchet wheel keyed to the arbor square + retaining screw
+      // ratchet wheel keyed to the arbor square on the BRIDGE'S BACK FACE
+      // (what the open caseback shows) + retaining screw behind
       const ratchetG = new THREE.Group()
       ratchetG.add(gearOf(L.ratchet, mats.brass, { spokes: 0, rimW: 20, holeR: 3.4 }))
       const rs = screw(mats, 4)
-      rs.position.z = 1.6
+      rs.position.z = -1.9
+      rs.rotation.y = Math.PI
       ratchetG.add(rs)
       ratchetG.position.z = tierZ(L.ratchet, zp)
       group.add(ratchetG)
       // mainspring coil, anchored to the arbor
       const coils = new THREE.Group()
+      coils.position.z = (drum.z0 + drum.z1) / 2 - zp
       for (let i = 0; i <= 5; i++) {
         const w = i / 5
         const coil = mesh(spiralTube(6.5, drum.r - 5, 4.5 + 3.5 * w, 1.1, w * 2), mats.steelDark)
@@ -312,19 +319,27 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
     case 'keylessWorks': {
       const zp = 20
       const kz = L.STEM_Z - zp // stem axis in local z
-      // --- stem, from inside the winding pinion out through the case tube
+      // --- stem, cut like a real stem: tip pivot (in the plate boss) →
+      //     square (castle) → round winding-pinion seat → setting-lever
+      //     groove → hub, out through the case tube to the crown
       const stem = new THREE.Group()
-      stem.add(cylX(L.STEM_R, 152, mats.steel, L.WINDING_PINION.x + 76 - 2, 0, kz))
-      stem.add(box(3.6, 3.6, 3.6, mats.steel, L.WINDING_PINION.x + 3, 0, kz)) // castle square
+      stem.position.z = kz // spin axis = the stem's own axis
+      const sq = L.STEM_SQUARE
+      stem.add(cylX(L.STEM_TIP.r, L.STEM_TIP.x1 - L.STEM_TIP.x0, mats.steel, (L.STEM_TIP.x0 + L.STEM_TIP.x1) / 2, 0, 0, 12))
+      stem.add(box(sq.x1 - sq.x0, 2 * sq.half, 2 * sq.half, mats.steel, (sq.x0 + sq.x1) / 2, 0, 0))
+      const seatLen = L.STEM_GROOVE.x - L.STEM_GROOVE.halfW - sq.x1
+      stem.add(cylX(2.3, seatLen, mats.steel, sq.x1 + seatLen / 2, 0, 0, 16)) // pinion seat
+      stem.add(cylX(L.STEM_GROOVE.rootR, 2 * L.STEM_GROOVE.halfW, mats.steel, L.STEM_GROOVE.x, 0, 0, 12)) // groove root
+      stem.add(cylX(L.STEM_R, 234 - (L.STEM_GROOVE.x + L.STEM_GROOVE.halfW), mats.steel, (L.STEM_GROOVE.x + L.STEM_GROOVE.halfW + 234) / 2, 0, 0))
       group.add(stem)
-      // --- winding pinion (free on the stem; driven only via the dogs)
+      // --- winding pinion, the OUTERMOST piece (free on its seat; driven
+      //     only via the dogs on its inboard face)
       const wpG = new THREE.Group()
-      const wpGear = gearGeometry(L.WINDING_PINION.r, L.WINDING_PINION.teeth, { thickness: L.WINDING_PINION.w, spokes: 0, rimW: 3, holeR: 2.8 })
+      const wpGear = gearGeometry(L.WINDING_PINION.r, L.WINDING_PINION.teeth, { thickness: L.WINDING_PINION.w, spokes: 0, rimW: 3, holeR: 2.4 })
       wpGear.rotateY(Math.PI / 2)
       wpG.add(mesh(wpGear, mats.steel))
       for (let i = 0; i < 4; i++) {
-        // dog teeth on the castle-facing side
-        const d = box(1.8, 1.6, 2.4, mats.steel, L.WINDING_PINION.w / 2 + 0.9, 0, 0)
+        const d = box(1.8, 1.6, 2.4, mats.steel, -L.WINDING_PINION.w / 2 - 0.9, 0, 0)
         const hold = new THREE.Group()
         hold.rotation.x = (i / 4) * TAU
         d.position.y = 3.4
@@ -333,43 +348,53 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       }
       wpG.position.set(L.WINDING_PINION.x, 0, kz)
       group.add(wpG)
-      // --- sliding castle wheel (dog face toward the winding pinion,
-      //     spur ring at the outer end for the setting wheels)
+      // --- sliding castle wheel INBOARD: dogs face outboard toward the
+      //     pinion; spur ring at the inboard end; waist groove for the yoke
       const castle = new THREE.Group()
       castle.add(cylX(4.2, L.CASTLE.w, mats.steel, 0, 0, 0))
+      castle.add(cylX(L.CASTLE_GROOVE.rootR, 2 * L.CASTLE_GROOVE.halfW + 0.2, mats.steelDark, L.CASTLE_GROOVE.off, 0, 0, 16))
       const spur = gearGeometry(L.CASTLE.r, L.CASTLE.teeth, { thickness: 3, spokes: 0, rimW: 2.4, holeR: 2.8 })
       spur.rotateY(Math.PI / 2)
-      castle.add(mesh(spur, mats.steel, L.CASTLE.w / 2 - 1.5, 0, 0))
+      castle.add(mesh(spur, mats.steel, L.CASTLE_SPUR_OFF, 0, 0))
       for (let i = 0; i < 4; i++) {
-        const d = box(1.8, 1.6, 2.4, mats.steel, -L.CASTLE.w / 2 - 0.9, 0, 0)
+        const d = box(1.8, 1.6, 2.4, mats.steel, L.CASTLE.w / 2 + 0.9, 0, 0)
         const hold = new THREE.Group()
         hold.rotation.x = (i / 4) * TAU + Math.PI / 4
         d.position.y = 3.4
         hold.add(d)
         castle.add(hold)
       }
-      castle.position.set(L.CASTLE.xRest, 0, kz)
+      castle.position.set(L.castleX(false), 0, kz)
       group.add(castle)
-      // --- crown wheel: spur tier to the ratchet + contrate ring up to the
-      //     winding pinion (this is the 90° turn of the winding chain)
-      const cwG = new THREE.Group()
-      cwG.add(gearOf(L.crownWheel, mats.brass, { spokes: 0, rimW: 12, holeR: 3 }))
+      // --- transfer wheel: contrate ring under the stem, tall arbor down
+      //     the side of the barrel, spur at the bridge's back face
+      const transferG = new THREE.Group()
       const ring = new THREE.Group()
-      for (let i = 0; i < L.CROWN_CONTRATE.teeth; i++) {
-        const a = (i / L.CROWN_CONTRATE.teeth) * TAU
-        ring.add(box(1.3, 1.8, 1.6, mats.brass, Math.cos(a) * L.CROWN_CONTRATE.r, Math.sin(a) * L.CROWN_CONTRATE.r, 0))
+      for (let i = 0; i < L.TRANSFER_RING.teeth; i++) {
+        const a = (i / L.TRANSFER_RING.teeth) * TAU
+        ring.add(box(1.3, 1.8, 1.6, mats.brass, Math.cos(a) * L.TRANSFER_RING.r, Math.sin(a) * L.TRANSFER_RING.r, 0))
       }
-      ring.position.z = (L.CROWN_CONTRATE_Z.z0 + L.CROWN_CONTRATE_Z.z1) / 2 - (L.crownWheel.z0 + L.crownWheel.z1) / 2
       // mounting offset phase-locks the face teeth to the winding pinion:
       // a ring gap always sits under a bottoming pinion tooth
       ring.rotation.z = L.contrateRingOffset()
-      cwG.add(ring)
-      const cwScrew = screw(mats, 3.4)
-      cwScrew.position.z = 1.8
-      cwG.add(cwScrew)
+      ring.position.z = (L.TRANSFER_RING.z0 + L.TRANSFER_RING.z1) / 2 - L.STEM_Z + kz
+      transferG.add(ring)
+      const ringDisc = cyl(L.TRANSFER_RING.r - 1, 1.6, mats.brass, 0, 0, ring.position.z - 1.4, 40)
+      transferG.add(ringDisc)
+      transferG.add(cyl(2.2, 19 - 2.2, mats.steel, 0, 0, (2.2 + 19) / 2 - L.STEM_Z + kz)) // arbor
+      transferG.add(cyl(1.2, 7.4, mats.steel, 0, 0, (L.BACK_TIER.z0 + 2.2) / 2 - L.STEM_Z + kz)) // lower pivot
+      const tSpur = gearOf(L.transferWheel, mats.brass, { spokes: 0, rimW: 12, holeR: 1.6 })
+      tSpur.position.z = tierZ(L.transferWheel, L.STEM_Z - kz)
+      transferG.add(tSpur)
+      transferG.position.set(L.transferWheel.x, -L.transferWheel.y, kz)
+      group.add(transferG)
+      // --- crown wheel on the bridge's back face (core post + screw live
+      //     on the barrel bridge part)
+      const cwG = new THREE.Group()
+      cwG.add(gearOf(L.crownWheel, mats.brass, { spokes: 0, rimW: 12, holeR: 3 }))
       cwG.position.set(L.crownWheel.x, -L.crownWheel.y, tierZ(L.crownWheel, zp))
       group.add(cwG)
-      // --- click (pawl) + click spring on the ratchet rim
+      // --- click (pawl) + click spring beside the ratchet, on the bridge
       const click = new THREE.Group()
       const pawl = new THREE.Shape()
       pawl.moveTo(0, 0)
@@ -377,13 +402,15 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       pawl.lineTo(9.5, -1)
       pawl.lineTo(2, -3)
       pawl.closePath()
-      click.add(mesh(new THREE.ExtrudeGeometry(pawl, { depth: 2, bevelEnabled: false }), mats.steel))
-      click.add(cyl(1.6, 3.4, mats.steel, 0, 0, 1))
-      click.position.set(58, 54, tierZ(L.ratchet, zp))
-      click.rotation.z = 2.2
+      const pawlMesh = mesh(new THREE.ExtrudeGeometry(pawl, { depth: 2, bevelEnabled: false }), mats.steel)
+      pawlMesh.position.z = -1
+      click.add(pawlMesh)
+      click.add(cyl(1.5, 4.5, mats.steel, 0, 0, 1.2)) // stud up into the bridge
+      click.position.set(L.CLICK.pivot.x, -L.CLICK.pivot.y, tierZ(L.ratchet, zp))
+      click.rotation.z = -Math.atan2(-(L.barrel.y - L.CLICK.pivot.y), L.barrel.x - L.CLICK.pivot.x) + 0.5
       group.add(click)
-      const clickSpring = mesh(spiralTube(4, 12, 0.8, 0.7, 1.2, 60), mats.blued)
-      clickSpring.position.set(66, 62, tierZ(L.ratchet, zp))
+      const clickSpring = mesh(spiralTube(3.6, 10, 0.8, 0.7, 1.9, 60), mats.blued)
+      clickSpring.position.set(L.CLICK.pivot.x - 8, -L.CLICK.pivot.y - 7, tierZ(L.ratchet, zp))
       group.add(clickSpring)
       // --- setting wheels
       const s1G = new THREE.Group()
@@ -397,14 +424,57 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       s2G.add(s2p)
       s2G.position.set(L.s2Wheel.x, -L.s2Wheel.y, tierZ(L.s2Wheel, zp))
       group.add(s2G)
+      // --- setting lever: hub on its stud, arm to the pin riding the stem
+      //     groove, finger to the yoke's tail pin
+      const lever = new THREE.Group()
+      const lv = L.SETTING_LEVER
+      lever.position.set(lv.pivot.x, -lv.pivot.y, 22.55 - zp)
+      lever.add(cyl(3.6, 1.7, mats.steelBrushed, 0, 0, 0))
+      const pinRest = L.settingLeverPin(false)
+      const leverArm = armTo(mats, { x: pinRest.x - lv.pivot.x, y: -(pinRest.y - lv.pivot.y) }, 4.4, 1.7)
+      lever.add(leverArm)
+      const leverPin = cyl(lv.pinR, 2.6, mats.steel, pinRest.x - lv.pivot.x, -(pinRest.y - lv.pivot.y), 2.1)
+      lever.add(leverPin)
+      const leverFinger = armTo(mats, { x: L.YOKE.tailPin.x - lv.pivot.x, y: -(L.YOKE.tailPin.y - lv.pivot.y) }, 4, 1.7)
+      lever.add(leverFinger)
+      group.add(lever)
+      const leverScrew = screw(mats, 2.4)
+      leverScrew.position.set(lv.pivot.x, -lv.pivot.y, 23.75 - zp)
+      group.add(leverScrew)
+      // --- yoke (bascule): fork riding the castle's waist groove, tail
+      //     pushed by the lever, return spring holding it home
+      const yoke = new THREE.Group()
+      yoke.position.set(L.YOKE.pivot.x, -L.YOKE.pivot.y, 22.55 - zp)
+      yoke.add(cyl(3.6, 1.7, mats.steelBrushed, 0, 0, 0))
+      const forkRest = { x: L.castleX(false) + L.CASTLE_GROOVE.off - L.YOKE.pivot.x, y: -(L.YOKE.tipY - L.YOKE.pivot.y) }
+      yoke.add(armTo(mats, forkRest, 4, 1.7))
+      // fork prongs flanking the groove, rising to the stem plane
+      for (const s of [-1, 1]) {
+        const prong = cyl(1, 2.6, mats.steelBrushed, forkRest.x + s * (L.CASTLE_GROOVE.halfW + 1), forkRest.y - 0.6, 1.7)
+        yoke.add(prong)
+      }
+      const tailRest = { x: L.YOKE.tailPin.x - L.YOKE.pivot.x, y: -(L.YOKE.tailPin.y - L.YOKE.pivot.y) }
+      yoke.add(armTo(mats, tailRest, 4, 1.7))
+      yoke.add(cyl(1.1, 2.4, mats.steel, tailRest.x, tailRest.y, 1.4)) // tail pin
+      group.add(yoke)
+      const yokeScrew = screw(mats, 2.4)
+      yokeScrew.position.set(L.YOKE.pivot.x, -L.YOKE.pivot.y, 23.75 - zp)
+      group.add(yokeScrew)
+      const yokeSpring = mesh(spiralTube(3, 8.5, 0.9, 0.6, 2.4, 50), mats.blued)
+      yokeSpring.position.set(L.YOKE.pivot.x - 9, -L.YOKE.pivot.y - 8, 22.55 - zp)
+      group.add(yokeSpring)
 
       let prevCrown = mv.crownAngle
+      let pullEase = mv.crownPulled ? 1 : 0
       return {
         group,
         update: (m) => {
           const a = L.renderedAngles(m)
-          // stem + castle always turn with the crown
+          // stem + castle always turn with the crown; the stem also slides
+          // out with it (the crown part carries the visible travel)
+          pullEase += ((m.crownPulled ? 1 : 0) - pullEase) * 0.5
           stem.rotation.x = -m.crownAngle
+          stem.position.x = pullEase * L.CASTLE.pull
           castle.rotation.x = -m.crownAngle
           // backward turns (pushed in): the castle's saw dogs ride up and
           // over the held winding pinion — the classic ratcheting zip
@@ -412,12 +482,16 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
           prevCrown = m.crownAngle
           const ratcheting = !m.crownPulled && dCrown < -1e-6
           const hop = ratcheting ? 1.1 * Math.abs(Math.sin(m.crownAngle * 6)) : 0
-          const targetX = L.CASTLE.xRest + (m.crownPulled ? L.CASTLE.pull : 0) + hop
-          castle.position.x += (targetX - castle.position.x) * 0.3
+          // the yoke's fork places the castle; the lever throws the yoke —
+          // both at their exactly-solved angles for the crown state
+          const targetX = L.castleX(false) - pullEase * L.CASTLE.pull - hop
+          castle.position.x += (targetX - castle.position.x) * 0.5
+          lever.rotation.z = -(L.settingLeverAngle(true) * pullEase)
+          yoke.rotation.z = -(L.yokeAngle(true) * pullEase)
           // winding pinion is rigidly geared to the ratchet through the
-          // crown wheel: a pure function of the wind state, one-way by the
-          // click — during winding it matches the crown exactly
+          // transfer and crown wheels: a pure function of the wind state
           wpG.rotation.x = -L.windingPinionAngle(m.mainspring.turns)
+          transferG.rotation.z = -a.transfer
           cwG.rotation.z = -a.crownWheel
           s1G.rotation.z = -a.s1
           s2G.rotation.z = -a.s2
@@ -427,19 +501,22 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
     // ----------------------------------------------------------- carriage
     case 'carriage': {
       const zp = 20
-      // lower arbor + the pinion the third wheel drives (phase-aligned)
-      group.add(cyl(3, 11, mats.steel, 0, 0, 7.5 - zp))
+      // lower arbor (necked pivot into the tourbillon cock's jewel) + the
+      // pinion the third wheel drives (phase-aligned)
+      group.add(cyl(3, 10.8, mats.steel, 0, 0, 7.6 - zp))
+      group.add(cyl(1.1, 4.6, mats.steel, 0, 0, -0.1 - zp))
       const pinion = gearOf(L.carriagePinion, mats.steel, { spokes: 0, rimW: 1.8, holeR: 1.2 })
       pinion.position.z = tierZ(L.carriagePinion, zp)
       group.add(pinion)
-      // cage: lower ring, three pillars, top hub
+      // cage: lower ring, three pillars (arched OUTSIDE the balance rim
+      // and the breathing hairspring — clearances audited in layout), top hub
       group.add(mesh(new THREE.TorusGeometry(GEO.carriage.r, 2, 12, 72), mats.steel, 0, 0, L.Z.cageRing - zp))
       for (let i = 0; i < 3; i++) {
         const a = (i / 3) * TAU + 0.5
         const p0 = new THREE.Vector3(Math.cos(a) * GEO.carriage.r, Math.sin(a) * GEO.carriage.r, L.Z.cageRing - zp)
-        const p1 = new THREE.Vector3(Math.cos(a) * 32, Math.sin(a) * 32, 10)
-        const p2 = new THREE.Vector3(Math.cos(a) * 11, Math.sin(a) * 11, L.Z.cageTop - zp - 1)
-        group.add(mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(p0, p1, p2), 24, 2, 10), mats.steel))
+        const p1 = new THREE.Vector3(Math.cos(a) * 40, Math.sin(a) * 40, 36 - zp)
+        const p2 = new THREE.Vector3(Math.cos(a) * 11, Math.sin(a) * 11, L.Z.cageTop - zp)
+        group.add(mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(p0, p1, p2), 24, 1.6, 10), mats.steel))
       }
       group.add(mesh(new THREE.TorusGeometry(10, 1.7, 10, 40), mats.steel, 0, 0, L.Z.cageTop - zp))
       // balance upper pivot: cap jewel in a gold chaton under a three-armed
@@ -455,30 +532,32 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       }
       // seconds marker on the lower ring
       group.add(box(10, 3.2, 1.8, mats.blued, GEO.carriage.r + 6, 0, L.Z.cageRing - zp))
-      // escapement bearings carried by the cage itself: a lower bar under
-      // the fork and escape arbors, and a slim upper bar over the escape
-      // wheel, each with jewelled holes (carriage local: fork at (0, 13.3),
-      // escape arbor at (0, 25.6))
-      const lowerBar = box(9, 36, 2.4, mats.steel, 0, 21, L.Z.cageRing - zp)
+      // escapement bearings carried by the cage itself: a lower bar OVER
+      // the fixed fourth wheel (balance staff, fork and escape arbors run
+      // down into its jewels; short of the third-wheel arbor it sweeps
+      // past), and a slim upper bar over the escape arbor
+      const barZ = (L.Z.cageBar.z0 + L.Z.cageBar.z1) / 2 - zp
+      const lowerBar = box(9, 33, L.Z.cageBar.z1 - L.Z.cageBar.z0, mats.steel, 0, 12.5, barZ)
       group.add(lowerBar)
-      for (const [jy, jr] of [[13.3, 2.6], [25.6, 2.6]] as const) {
+      for (const [jy, jr] of [[0, 2.6], [13.3, 2.6], [25.6, 2.6]] as const) {
         const j = jewel(mats, jr)
-        j.position.set(0, jy, L.Z.cageRing - zp + 1.6)
+        j.position.set(0, jy, L.Z.cageBar.z1 - zp - 0.6)
         group.add(j)
       }
-      const upperBar = box(6, 24, 1.8, mats.steel, 0, 22.5, L.Z.escapeWheel.z1 - zp + 3.2)
+      const upperBar = box(6, 15.2, 1.8, mats.steel, 0, 26.6, 27.1 - zp)
       group.add(upperBar)
       const jU = jewel(mats, 2.1)
-      jU.position.set(0, 25.6, L.Z.escapeWheel.z1 - zp + 4.4)
+      jU.position.set(0, 25.6, 25.85 - zp)
       group.add(jU)
       // hairspring stud pillar (the spring's outer end is pinned here)
-      group.add(cyl(1.5, 5, mats.steel, 20.5, 0, (L.Z.hairspring.z0 + L.Z.hairspring.z1) / 2 - zp))
-      group.add(box(3.4, 3.4, 3, mats.steel, 20.5, 0, L.Z.hairspring.z1 - zp + 1))
-      // regulator index over the hairspring, with curb pins
+      group.add(cyl(1.5, 5, mats.steel, 18.8, 0, (L.Z.hairspring.z0 + L.Z.hairspring.z1) / 2 - zp))
+      group.add(box(3.4, 3.4, 3, mats.steel, 18.8, 0, L.Z.hairspring.z1 - zp + 1))
+      // regulator index over the hairspring, with curb pins straddling the
+      // outer coil
       const regulator = new THREE.Group()
-      regulator.add(box(16, 2.4, 1.2, mats.blued, 12, 0, 0))
-      regulator.add(cyl(0.55, 3, mats.blued, 19, 0.9, -1.4))
-      regulator.add(cyl(0.55, 3, mats.blued, 19, -0.9, -1.4))
+      regulator.add(box(14.5, 2.4, 1.2, mats.blued, 11, 0, 0))
+      regulator.add(cyl(0.55, 3, mats.blued, 18, 0.9, -1.4))
+      regulator.add(cyl(0.55, 3, mats.blued, 18, -0.9, -1.4))
       regulator.position.z = L.Z.cageTop - zp - 1.4
       group.add(regulator)
       return {
@@ -492,12 +571,12 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       }
     }
     case 'escapeWheel': {
-      const zp = 19.75
+      const zp = 20.95
       group.add(mesh(escapeWheelGeometry(12, 1.5), mats.steel))
       const pin = gearOf(L.escPinion, mats.steel, { spokes: 0, rimW: 0.9, holeR: 0.7 })
       pin.position.z = tierZ(L.escPinion, zp)
       group.add(pin)
-      group.add(cyl(1, 12, mats.steel, 0, 0, 0.25))
+      group.add(cyl(1, 11.8, mats.steel, 0, 0, 0.15)) // pivots: cage jewels below + above
       return {
         group,
         update: (m) => {
@@ -541,7 +620,7 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
         const a = (i / 8) * TAU + 0.2
         group.add(cyl(1.5, 2.4, mats.gold, Math.cos(a) * 27, Math.sin(a) * 27, 0))
       }
-      group.add(cyl(1.2, 14, mats.steel)) // staff
+      group.add(cyl(1.2, 18.2, mats.steel, 0, 0, -1.9)) // staff, down into the cage bar jewel
       group.add(cyl(5.2, 1.5, mats.steel, 0, 0, L.Z.roller - 30))
       group.add(cyl(0.9, 3.2, mats.ruby, 0, -5.2, L.Z.roller - 30))
       // Breathing hairspring: the OUTER end stays pinned to the carriage
@@ -558,7 +637,7 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       const variants: THREE.Mesh[] = []
       for (let dlt = -DELTA_MAX; dlt <= DELTA_MAX + 1e-9; dlt += DELTA_STEP) {
         const turns = (OUTER_END - dlt) / TAU
-        const v = mesh(spiralTube(3, 20, turns, 0.45, dlt, 260), mats.blued)
+        const v = mesh(spiralTube(3, 18, turns, 0.45, dlt, 260), mats.blued)
         v.visible = false
         variants.push(v)
         springBox.add(v)
@@ -698,7 +777,8 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
         fingerG.rotation.z = az
         sw.add(fingerG)
       }
-      sw.add(cyl(2, (L.RACK_GEO.minute.z1 - L.Z.plate.z1) + 2, mats.steel, 0, 0, (L.RACK_GEO.minute.z1 + L.Z.plate.z1) / 2 - zp))
+      // staff runs from the plate jewel up into the strike bridge
+      sw.add(cyl(2, L.STRIKE_BRIDGE.z0 + 0.6 - L.Z.plate.z1, mats.steel, 0, 0, (L.STRIKE_BRIDGE.z0 + 0.6 + L.Z.plate.z1) / 2 - zp))
       group.add(sw)
       // intermediate two-tier wheel toward the governor
       const inter = new THREE.Group()
@@ -706,7 +786,7 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       const iw = gearOf(L.strikeInterWheel, mats.steelBrushed, { spokes: 0, rimW: 4, holeR: 1.8 })
       iw.position.z = (L.strikeInterWheel.z0 + L.strikeInterWheel.z1) / 2 - (L.strikeInterPinion.z0 + L.strikeInterPinion.z1) / 2
       inter.add(iw)
-      inter.add(cyl(1.6, 9, mats.steel, 0, 0, 1))
+      inter.add(cyl(1.6, L.STRIKE_BRIDGE.z0 + 0.6 - L.Z.plate.z1, mats.steel, 0, 0, (L.STRIKE_BRIDGE.z0 + 0.6 + L.Z.plate.z1) / 2 - (L.strikeInterPinion.z0 + L.strikeInterPinion.z1) / 2))
       inter.position.set(L.strikeInterWheel.x - L.strikeWheel.x, -(L.strikeInterWheel.y - L.strikeWheel.y), tierZ(L.strikeInterPinion, zp))
       group.add(inter)
       return {
@@ -720,10 +800,11 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
     }
     case 'flyGovernor': {
       group.add(gearOf(L.governorPinion, mats.steel, { spokes: 0, rimW: 3, holeR: 1.4 }))
-      group.add(cyl(1.3, 11, mats.steel, 0, 0, 3))
+      // arbor from the plate jewel up into the strike bridge
+      group.add(cyl(1.3, L.STRIKE_BRIDGE.z0 + 0.6 - L.Z.plate.z1, mats.steel, 0, 0, (L.STRIKE_BRIDGE.z0 + 0.6 + L.Z.plate.z1) / 2 - 30.9))
       for (const s of [-1, 1]) {
-        const vane = box(12, 5.5, 0.7, mats.steelBrushed, s * 7.5, 0, 5.4)
-        vane.rotation.x = s * 0.5
+        const vane = box(12, 5.5, 0.7, mats.steelBrushed, s * 7.5, 0, -7.4)
+        vane.rotation.x = s * 0.35
         group.add(vane)
       }
       break
@@ -737,8 +818,8 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
         x: L.SLIDE_PIN.x - L.AON_PIVOT.x, // -16
         y: -(L.AON_NOTCH_Y - L.AON_PIVOT.y), // three local (y flip)
       }
-      group.add(cyl(2.4, 9, mats.steel, 0, 0, -3)) // pivot stud into the plate
-      group.add(cyl(3.4, 3.2, mats.steel, 0, 0, 0))
+      group.add(cyl(2.4, 6.5, mats.steel, 0, 0, -3.25)) // pivot stud into the plate
+      group.add(cyl(3.4, 2.6, mats.steel, 0, 0, 0))
       const hook = new THREE.Group()
       // arm out to the pin line
       const hookAz = Math.atan2(notchLocal.y, notchLocal.x)
@@ -774,28 +855,37 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       const zp = hg.z
       const mat = isLow ? mats.steel : mats.gold
       const arm = new THREE.Group()
-      // head arm out to the gong band (three local: flip y, negate angles)
-      const headDx = hg.headTip.x - hg.pivot.x
-      const headDy = -(hg.headTip.y - hg.pivot.y)
-      const headLen = Math.hypot(headDx, headDy)
-      const headAz = Math.atan2(headDy, headDx)
-      // low arm is thinner: it passes between the two gong tubes
+      // arm out to the striking face (dog-legged through the elbow when
+      // the straight line would cross a rack) — three local: flip y
       const armT = isLow ? L.HAMMER_LOW_ARM_T : L.HAMMER_HIGH_ARM_T
-      const armGeo = new THREE.BoxGeometry(headLen - 4, 3.2, armT)
-      armGeo.translate((headLen - 4) / 2, 0, 0)
-      const headArm = mesh(armGeo, mat)
-      headArm.rotation.z = headAz
-      arm.add(headArm)
-      const head = mesh(new THREE.BoxGeometry(7, 9, 4.6), mat, 0, 0, 0)
-      head.position.set(Math.cos(headAz) * (headLen - 2), Math.sin(headAz) * (headLen - 2), 0)
-      head.rotation.z = headAz
+      const pts = [hg.pivot, ...(hg.elbow ? [hg.elbow] : []), hg.headTip]
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const a = { x: pts[i].x - hg.pivot.x, y: -(pts[i].y - hg.pivot.y) }
+        const b = { x: pts[i + 1].x - hg.pivot.x, y: -(pts[i + 1].y - hg.pivot.y) }
+        const legLen = Math.hypot(b.x - a.x, b.y - a.y) - (i + 2 === pts.length ? 4 : 0)
+        const legGeo = new THREE.BoxGeometry(legLen + 1, 3.2, armT)
+        legGeo.translate((legLen + 1) / 2 - 0.5, 0, 0)
+        const leg = mesh(legGeo, mat, a.x, a.y, 0)
+        leg.rotation.z = Math.atan2(b.y - a.y, b.x - a.x)
+        arm.add(leg)
+      }
+      // head: striking face AT the layout contact point (rest gap included)
+      const headAz3 = -hg.headAz
+      const head = mesh(new THREE.BoxGeometry(7, 9, 3.2), mat)
+      head.position.set(
+        hg.headTip.x - hg.pivot.x - Math.cos(headAz3) * 3.5,
+        -(hg.headTip.y - hg.pivot.y) - Math.sin(headAz3) * 3.5,
+        0,
+      )
+      head.rotation.z = headAz3
       arm.add(head)
       // tail: TALL lifting pallet reaching into the racks' tooth paths at
       // the gathering staff — this is what the returning rack teeth lift
       const tailAz = Math.atan2(-Math.sin(hg.tailAzimuth), Math.cos(hg.tailAzimuth))
-      const tailGeo = new THREE.BoxGeometry(hg.tailLen, 3, 2.2)
-      tailGeo.translate(hg.tailLen / 2, 0, 0)
-      const tail = mesh(tailGeo, mat)
+      const bladeZ = isLow ? -1.5 : -1.6 // blade ducks under its racks' tiers
+      const tailGeo = new THREE.BoxGeometry(hg.tailLen - 3, 3, 2.2)
+      tailGeo.translate((hg.tailLen - 3) / 2, 0, 0)
+      const tail = mesh(tailGeo, mat, 0, 0, bladeZ)
       tail.rotation.z = tailAz
       arm.add(tail)
       const palletH = hg.tailZ1 - hg.tailZ0
@@ -808,8 +898,9 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       )
       arm.add(pallet)
       group.add(arm)
-      group.add(cyl(2.4, 5.4, mats.steel))
-      group.add(cyl(2, zp - L.Z.plate.z1, mats.steel, 0, 0, -(zp - L.Z.plate.z1) / 2 - 1)) // stud
+      const hubZ0 = isLow ? zp - 2.8 : 33.5
+      group.add(cyl(2.4, zp + 2.8 - hubZ0, mats.steel, 0, 0, (hubZ0 + zp + 2.8) / 2 - zp))
+      group.add(cyl(2, hubZ0 - L.Z.plate.z1, mats.steel, 0, 0, (L.Z.plate.z1 + hubZ0) / 2 - zp)) // stud
       // hammer return spring
       const hs = mesh(spiralTube(3, 9, 0.8, 0.6, tailAz + 2.2, 50), mats.blued)
       group.add(hs)
@@ -822,8 +913,9 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
           const LIFT_SPAN = 0.55 * TAU
           const lift = Number.isFinite(d) && d < LIFT_SPAN ? 1 - d / LIFT_SPAN : 0
           const flash = isLow ? fx.hammerFlash.low : fx.hammerFlash.high
-          // + cocks away from the gong; the flash overshoots into the strike
-          arm.rotation.z = -(lift * 0.4 - flash * 0.12)
+          // cocks away from the gong (three rot = -watch); the flash closes
+          // the rest gap into the coil for one frame
+          arm.rotation.z = -(lift * L.HAMMER_SWING) + flash * 0.014
         },
       }
     }
@@ -832,18 +924,31 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       const isLow = id === 'gongLow'
       const base = isLow ? mats.gongSteel : mats.gongGold
       const gm = base.clone()
-      const rStart = (isLow ? L.GONG_LOW : L.GONG_HIGH).rStart
-      const a0 = -(isLow ? -0.12 : 0.18)
-      group.add(mesh(spiralTube(rStart, rStart - 17, -1.9, 1.6, a0, 420), gm))
+      const spec = isLow ? L.GONG_LOW : L.GONG_HIGH
+      // exactly the audited spiral: watch a0 -> three a0 is negated, and
+      // the coil advances clockwise (negative three turns)
+      group.add(mesh(spiralTube(spec.rStart, spec.rStart - spec.drop, -spec.turns, spec.tubeR, -spec.a0, 420), gm))
       if (isLow) {
-        // the shared gong block, screwed to the plate: both gongs' feet
-        // are brazed into it
-        const block = box(10, 16, 8, mats.steelBrushed, Math.cos(0.12) * 152, Math.sin(0.12) * 152 * -1 + 5, 1)
-        block.position.set(148, 4, 1)
+        // the shared gong block on the plate, radially outside every inner
+        // coil pass; both gongs' feet are brazed into it
+        const midAz = (L.GONG_BLOCK.a0 + L.GONG_BLOCK.a1) / 2
+        const rMid = (L.GONG_BLOCK.rIn + L.GONG_BLOCK.rOut) / 2
+        const block = box(
+          L.GONG_BLOCK.rOut - L.GONG_BLOCK.rIn,
+          rMid * (L.GONG_BLOCK.a1 - L.GONG_BLOCK.a0),
+          L.GONG_BLOCK.z1 - L.GONG_BLOCK.z0,
+          mats.steelBrushed,
+          Math.cos(midAz) * rMid,
+          -Math.sin(midAz) * rMid,
+          (L.GONG_BLOCK.z0 + L.GONG_BLOCK.z1) / 2 - spec.z,
+        )
+        block.rotation.z = -midAz
         group.add(block)
         const bs = screw(mats, 2.6)
-        bs.position.set(148, 4, 5.4)
+        bs.position.set(Math.cos(midAz) * rMid, -Math.sin(midAz) * rMid, L.GONG_BLOCK.z1 - spec.z + 0.5)
         group.add(bs)
+        // anchor post down to the plate, outside the outermost coil
+        group.add(cyl(2.2, L.GONG_BLOCK.z0 - L.Z.plate.z1, mats.steelBrushed, Math.cos(midAz) * 160, -Math.sin(midAz) * 160, (L.GONG_BLOCK.z0 + L.Z.plate.z1) / 2 - spec.z))
       }
       return {
         group,
@@ -872,17 +977,18 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       group.add(mesh(g, dm))
       group.add(mesh(new THREE.TorusGeometry(GEO.apertureR + 1.2, 1.4, 8, 64), mats.gold, 0, -GEO.carriage.y, 1))
       group.add(mesh(new THREE.TorusGeometry(12.2, 1.1, 8, 40), mats.gold, 0, 0, 1))
-      // dial feet down to the mainplate
+      // dial feet down into their plate bores, outside the gong coils
       for (const az of [45, 135, 225, 315]) {
         const a = (az * Math.PI) / 180
-        group.add(cyl(1.6, 20.5, mats.brass, Math.cos(a) * 150, Math.sin(a) * 150, -11.25))
+        group.add(cyl(1.6, 20.5, mats.brass, Math.cos(a) * 160, Math.sin(a) * 160, -11.25))
       }
       break
     }
     case 'hourHand': {
-      // hub sleeve pressed onto the hour-wheel pipe
+      // hub sleeve pressed onto the hour-wheel pipe; the blade's centre
+      // hole clears the pipes continuing up to the minute hand
       group.add(mesh(lathe([[7.7, -1.4], [10, -1.2], [10, 1], [7.7, 1.2], [7.7, -1.4]]), mats.blued))
-      group.add(mesh(handGeometry(88, 7, 1.3), mats.blued, 0, 0, 0.5))
+      group.add(mesh(handGeometry(88, 7, 1.3, 7.8), mats.blued, 0, 0, 0.5))
       break
     }
     case 'minuteHand': {
@@ -909,7 +1015,7 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
           lug.rotation.z = -sx * sy * 0.12
           group.add(lug)
         }
-      // case tube the stem passes through
+      // case tube the stem passes through, on the stem axis
       const tube = new THREE.CylinderGeometry(4.6, 4.6, 16, 20)
       tube.rotateZ(Math.PI / 2)
       group.add(mesh(tube, mats.caseSteel, 223, 0, L.STEM_Z - 17))
@@ -951,9 +1057,10 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       g.translate(0, 0, -3.5)
       group.add(mesh(g, mats.caseSteel))
       group.add(box(6, 26, 3, mats.gold, 0, 0, 4))
-      // the lever arm reaching through the band to the all-or-nothing piece
-      group.add(box(52, 6, 4, mats.steelBrushed, 30, -5, 3))
-      group.add(cyl(2.2, 12, mats.steel, 56, -8, 4)) // latch pin, down into the hook plane
+      // the lever arm reaching over the plate rim to the all-or-nothing
+      // piece — it passes UNDER the gong coils (z audited)
+      group.add(box(52, 6, 2.5, mats.steelBrushed, 30, -5, -1.25))
+      group.add(cyl(2.2, 4.7, mats.steel, 56, -8, 0.35)) // latch pin, into the hook plane
       break
     }
     case 'bezelCrystal': {
@@ -973,6 +1080,38 @@ export function buildPartObject(id: string, mats: Materials, mv: Movement): Buil
       group.add(cyl(6, 2, mats.steelDark))
   }
   return { group }
+}
+
+/**
+ * Bridge/cock from its audited layout spec: outline plate with every bore,
+ * feet to the plate, fixing screws. side 0 = movement back (screw heads
+ * face the caseback), side 1 = dial side (heads face the dial).
+ */
+function buildBridge(
+  group: THREE.Group,
+  mats: Materials,
+  spec: L.BridgeSpec,
+  anchor: { x: number; y: number },
+  side: 0 | 1,
+): void {
+  const zPos = (spec.z0 + spec.z1) / 2
+  const pts: Array<[number, number]> = spec.outline.map(([x, y]) => [x - anchor.x, -(y - anchor.y)])
+  const holes = spec.holes.map((h) => ({ x: h.x - anchor.x, y: -(h.y - anchor.y), r: h.r }))
+  group.add(mesh(plateGeometry(pts, spec.z1 - spec.z0, holes), mats.plate))
+  for (const f of spec.feet) {
+    const fx = f.x - anchor.x
+    const fy = -(f.y - anchor.y)
+    const [fz0, fz1] = spec.footZ
+    group.add(cyl(3, fz1 - fz0, mats.plate, fx, fy, (fz0 + fz1) / 2 - zPos, 20))
+    const sc = screw(mats, 2.9)
+    if (side === 0) {
+      sc.position.set(fx, fy, spec.z0 - zPos - 0.5)
+      sc.rotation.y = Math.PI
+    } else {
+      sc.position.set(fx, fy, spec.z1 - zPos + 0.5)
+    }
+    group.add(sc)
+  }
 }
 
 /**
